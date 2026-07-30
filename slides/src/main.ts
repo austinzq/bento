@@ -14,6 +14,7 @@ import {
 import { buildSlidePreview } from './preview'
 import { APP_VERSION, checkForUpdates, buildUpdatedFile, applyUpdate } from './update'
 import { i18nApi, t, applyDirection } from './i18n'
+import { interact } from './interact'
 import { parseDoc, type BentoDoc } from './model'
 import { starterDoc } from './starterdeck'
 import { injectFonts } from './fonts'
@@ -99,6 +100,7 @@ async function passwordGate() {
 }
 
 function bootWith(doc: BentoDoc) {
+  interact.hydrate(doc.docId, doc.interactState)
   if (doc.readonly) playerMode(doc)
   else editorMode(doc)
 }
