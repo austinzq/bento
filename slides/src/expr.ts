@@ -130,6 +130,19 @@ export function parseExpr(src: string): ExprNode {
 
 const num = (v: unknown): number => (typeof v === 'number' ? v : parseFloat(String(v ?? '0')) || 0)
 
+/**
+ * 判断一个值是否应该按数字处理。
+ * 数字类型本身或者是能转成数字的字符串（不像parseFloat那样截断）才返回true。
+ */
+const isNumericValue = (v: unknown): boolean => {
+  if (typeof v === 'number') return true
+  if (typeof v === 'string') {
+    const trimmed = v.trim()
+    return trimmed !== '' && !isNaN(Number(trimmed))
+  }
+  return false
+}
+
 export function evalExpr(node: ExprNode, ctx: Record<string, unknown>): unknown {
   switch (node.kind) {
     case 'num': return node.value
@@ -155,10 +168,26 @@ export function evalExpr(node: ExprNode, ctx: Record<string, unknown>): unknown 
         case '/': return num(r) === 0 ? 0 : num(l) / num(r)
         case '==': return l === r
         case '!=': return l !== r
-        case '>': return num(l) > num(r)
-        case '<': return num(l) < num(r)
-        case '>=': return num(l) >= num(r)
-        case '<=': return num(l) <= num(r)
+        case '>': {
+          const lIsNum = isNumericValue(l)
+          const rIsNum = isNumericValue(r)
+          return lIsNum && rIsNum ? num(l) > num(r) : String(l) > String(r)
+        }
+        case '<': {
+          const lIsNum = isNumericValue(l)
+          const rIsNum = isNumericValue(r)
+          return lIsNum && rIsNum ? num(l) < num(r) : String(l) < String(r)
+        }
+        case '>=': {
+          const lIsNum = isNumericValue(l)
+          const rIsNum = isNumericValue(r)
+          return lIsNum && rIsNum ? num(l) >= num(r) : String(l) >= String(r)
+        }
+        case '<=': {
+          const lIsNum = isNumericValue(l)
+          const rIsNum = isNumericValue(r)
+          return lIsNum && rIsNum ? num(l) <= num(r) : String(l) <= String(r)
+        }
         default: throw new ExprSyntaxError(`unknown operator '${node.op}'`)
       }
     }

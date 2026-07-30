@@ -19,6 +19,11 @@ ok(evalExpr(parseExpr('max(1,5,2)'), {}) === 5, 'max works')
 console.log('ternary + comparison…')
 ok(evalExpr(parseExpr("input.budget > 100 ? '超支' : '正常'"), { 'input.budget': 200 }) === '超支', 'ternary + comparison')
 
+console.log('string vs numeric comparison…')
+ok(evalExpr(parseExpr("'2026-01-01' < '2026-02-01'"), {}) === true, 'date strings compare lexicographically (not truncated)')
+ok(evalExpr(parseExpr("'2026-02-01' > '2026-01-01'"), {}) === true, 'date strings compare lexicographically (correct order)')
+ok(evalExpr(parseExpr('100 > 50'), {}) === true, 'numeric comparison still works')
+
 console.log('malformed expressions never throw via resolveExprString…')
 ok(resolveExprString('filter.(((', {}) === '{{filter.(((}}', 'syntax error falls back to literal token')
 ok(resolveExprString('unknownFunc(1)', {}) === '{{unknownFunc(1)}}', 'non-whitelisted function falls back to literal token')
