@@ -5,7 +5,7 @@
 // into a single undo checkpoint.
 
 import type { Store } from '../store'
-import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
+import { MEDIA_EMBED_BUDGET, applyChartPalette, defaultChart, internAsset, morphKey, tableStyleFor, uid, type ChartElement, type FilterElement, type InputElement, type LineEnding, type MediaElement, type ShapeElement, type Slide, type SlideElement, type TableElement, type TextElement, type TransitionKind } from '../model'
 import { resolveAsset } from '../render'
 import { isMacOS } from '../screens'
 import { CHART_PRESETS } from '../charts'
@@ -419,6 +419,8 @@ export class PropsPanel {
     if (el.type === 'chart') this.buildChartProps(el)
     if (el.type === 'table') this.buildTableProps(el)
     if (el.type === 'media') this.buildMediaProps(el)
+    if (el.type === 'filter') this.buildFilterProps(el)
+    if (el.type === 'input') this.buildInputProps(el)
 
     this.section(t('Position & size'))
     const geo = document.createElement('div')
@@ -507,6 +509,7 @@ export class PropsPanel {
 
     this.buildPresentingProps(el)
     this.buildMorphProps(el)
+    this.buildParamsProps()
   }
 
   /**
@@ -1682,6 +1685,118 @@ export class PropsPanel {
           if (v) m.poster = v; else delete m.poster
         }, true))
       this.row('Poster', poster)
+    }
+  }
+
+  /** Filter control: viewer-facing select/multiselect/slider/date-range that
+   *  writes to the interact store under `key` (see FilterElement in model.ts).
+   *  `optionsSource` (table-driven options) has no picker UI here — just a
+   *  read-only summary + a way to clear it back to the manual `options` list;
+   *  building the "pick a table + column" dropdown is out of scope for this task. */
+  private buildFilterProps(el: FilterElement) {
+    this.section(t('Filter'))
+    this.row('Kind', this.select(['select', 'multiselect', 'slider', 'date-range'], el.kind, (v) =>
+      this.mutate(el.id, (e) => { (e as FilterElement).kind = v as FilterElement['kind'] }, true)))
+
+    const key = document.createElement('input')
+    key.type = 'text'
+    key.value = el.key
+    key.spellcheck = false
+    key.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as FilterElement).key = key.value.trim() }, true))
+    this.row('Key', key)
+
+    const label = document.createElement('input')
+    label.type = 'text'
+    label.value = el.label ?? ''
+    label.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as FilterElement).label = label.value || undefined }, true))
+    this.row('Label', label)
+
+    const def = document.createElement('input')
+    def.type = 'text'
+    def.value = el.default ?? ''
+    def.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as FilterElement).default = def.value || undefined }, true))
+    this.row('Default', def)
+
+    const opts = document.createElement('input')
+    opts.type = 'text'
+    opts.placeholder = t('Comma-separated options')
+    opts.value = (el.options ?? []).join(',')
+    opts.addEventListener('change', () =>
+      this.mutate(el.id, (e) => {
+        (e as FilterElement).options = opts.value.split(',').map((s) => s.trim()).filter(Boolean)
+      }, true))
+    this.row('Options', opts)
+
+    if (el.optionsSource) {
+      const hint = document.createElement('p')
+      hint.className = 'ed-hint'
+      hint.textContent = t('Options come from table “{tableId}”, column “{column}”.', el.optionsSource)
+      this.host.appendChild(hint)
+      const clear = document.createElement('button')
+      clear.className = 'ed-btn'
+      clear.textContent = t('Clear table source')
+      clear.addEventListener('click', () =>
+        this.mutate(el.id, (e) => { (e as FilterElement).optionsSource = undefined }, true))
+      this.host.appendChild(clear)
+    }
+  }
+
+  /** Viewer input box: writes to the interact store under `key` (see
+   *  InputElement in model.ts). */
+  private buildInputProps(el: InputElement) {
+    this.section(t('Input'))
+    this.row('Kind', this.select(['text', 'number', 'date'], el.kind, (v) =>
+      this.mutate(el.id, (e) => { (e as InputElement).kind = v as InputElement['kind'] }, true)))
+
+    const key = document.createElement('input')
+    key.type = 'text'
+    key.value = el.key
+    key.spellcheck = false
+    key.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as InputElement).key = key.value.trim() }, true))
+    this.row('Key', key)
+
+    const label = document.createElement('input')
+    label.type = 'text'
+    label.value = el.label ?? ''
+    label.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as InputElement).label = label.value || undefined }, true))
+    this.row('Label', label)
+
+    const placeholder = document.createElement('input')
+    placeholder.type = 'text'
+    placeholder.value = el.placeholder ?? ''
+    placeholder.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as InputElement).placeholder = placeholder.value || undefined }, true))
+    this.row('Placeholder', placeholder)
+
+    const def = document.createElement('input')
+    def.type = 'text'
+    def.value = el.default ?? ''
+    def.addEventListener('change', () =>
+      this.mutate(el.id, (e) => { (e as InputElement).default = def.value || undefined }, true))
+    this.row('Default', def)
+  }
+
+  /** Component-instance parameters: when the current slide was stamped from a
+   *  layout with `params.*` placeholders (see instantiateLayout in model.ts),
+   *  it carries a `paramValues` map. Edited here as plain doc fields — same
+   *  undo/commit path as everything else — not the runtime interact store. */
+  private buildParamsProps() {
+    const values = this.store.slide.paramValues
+    if (!values || !Object.keys(values).length) return
+    this.section(t('Component parameters'))
+    for (const k of Object.keys(values)) {
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.value = values[k]
+      input.addEventListener('change', () => {
+        this.store.commit(() => { this.store.slide.paramValues![k] = input.value })
+      })
+      this.row(k, input)
     }
   }
 
