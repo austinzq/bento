@@ -803,7 +803,14 @@ const bindingHandles = new WeakMap<HTMLElement, () => void>()
 function expandComputedToLeaves(name: string, doc: BentoDoc, slide: Slide, seen = new Set<string>()): string[] {
   if (seen.has(name)) return []
   seen.add(name)
-  const expr = (doc.computed ?? {})[name] ?? (slide.computed ?? {})[name]
+  // slide-first: matches buildBindingContext's `{ ...doc.computed, ...slide.computed }`
+  // (render.ts), which lets a slide-level computed field intentionally
+  // override a doc-level one of the same name. Looking doc-first here would
+  // expand the WRONG (shadowed) expression's dependencies whenever a slide
+  // overrides a same-named computed field with a different formula — the
+  // element would subscribe to stale keys and never re-render when the
+  // formula it actually displays changes.
+  const expr = (slide.computed ?? {})[name] ?? (doc.computed ?? {})[name]
   if (expr === undefined) return []
   const leaves: string[] = []
   for (const ref of computedRefs(expr)) leaves.push(...expandComputedToLeaves(ref, doc, slide, seen))

@@ -131,7 +131,14 @@ export function buildBindingContext(doc: BentoDoc, slide: Slide): Record<string,
   // filter.x/input.x sees the same default the control shows. This only
   // patches the read-side context — it never calls interact.set, so it can't
   // create a runtime-store side effect from a render pass.
-  for (const el of slide.elements) {
+  //
+  // Scan doc.slides (every slide), not just this slide's elements — same
+  // scope as the table-column loop above. A filter's control can live on a
+  // DIFFERENT slide than the text that references its key (e.g. the control
+  // is on a "filters" slide, a report slide elsewhere reads {{filter.x}}); a
+  // viewer who never visits the control's slide first must still see its
+  // default, not an empty string.
+  for (const el of doc.slides.flatMap((s) => s.elements)) {
     if (el.type === 'filter' && ctx[`filter.${el.key}`] === undefined) ctx[`filter.${el.key}`] = el.default ?? ''
     if (el.type === 'input' && ctx[`input.${el.key}`] === undefined) ctx[`input.${el.key}`] = el.default ?? ''
   }
