@@ -11,6 +11,21 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Interactive data bindings — filters, computed fields, cross-filtering, and
+  reusable component parameters.** Slides can now carry `filter`/`input`
+  elements whose live values interpolate into any text via `{{filter.x}}` /
+  `{{input.x}}`; a `computed` field can combine them with `sum`/`avg`/`count`/
+  `min`/`max` over a table column (`table.<id>.<col>`) using a small, safe
+  expression grammar (no `eval`, no functions in the document — the same
+  invariant as everywhere else). Clicking a bar/pie chart with a `filterKey`
+  writes the clicked category into the same store, so charts and text can
+  cross-filter each other and drill-down naturally reuses the existing
+  slide-link mechanism. Layouts can declare named `params` so one component
+  design can be instantiated multiple times with different values. Filter/
+  input state is optionally baked into the saved file (`doc.interactState`)
+  so a shared deck opens exactly as you left it; "Duplicate as new deck" and
+  "Save as template" both start clean.
+
 ## [1.0.11] — 2026-07-27
 
 - **LaTeX maths in any text box, rendered as MathML.** Type `$E=mc^2$` and it

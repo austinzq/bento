@@ -14,6 +14,27 @@ Decision. Why. Pointers.
 
 ---
 
+## 2026-07-30 — Interactive bindings: no eval, computed via DFS dependency graph, table refs are scalar-flattened not row-filtered
+
+Filter/input elements and chart cross-filtering read/write a new runtime
+singleton (`slides/src/interact.ts`), never the document model directly —
+keeps undo/redo untouched by viewer interaction. Binding expressions
+(`slides/src/expr.ts`) are a hand-written recursive-descent grammar with a
+function whitelist (`sum/avg/count/min/max`) — never `eval`/`new Function`,
+same invariant the document-model sanitizer already enforces for `element.html`
+and chart options.
+
+`computed` fields resolve via a DFS dependency graph (not object-key order) so
+forward references and true cycles both work; cycles resolve to `'#ERROR'`
+for every member of the cycle, not just the one that closed the loop.
+
+`table.<id>.<col>` currently flattens a table's numeric column into the
+function-call argument list (`sum(table.sales.amount)` sums the column) — it
+does NOT filter table ROWS by a `multiselect`/`date-range` control's value.
+Real row-level filtering (the `multiselect`/`date-range` spec behavior) is
+still open; `slider`/`date-range` filter kinds are hidden from the editor
+panel until they're built. See docs/superpowers/specs/2026-07-30-interactive-bindings-design.md.
+
 ## 2026-07-27 — Thumbnails: plain markup plus a parser-blocking remover, NOT `<noscript>`
 
 **Supersedes the 2026-07-26 entry below** on the one point of where the preview
