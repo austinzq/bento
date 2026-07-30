@@ -13,6 +13,20 @@ export interface InteractStore {
   hydrate(docId: string, saved?: Record<string, unknown>): void
 }
 
+/** Safe merge: copy only own enumerable properties, skip __proto__/constructor/prototype. */
+function safeMerge(target: Record<string, unknown>, source: Record<string, unknown> | null | undefined) {
+  if (!source || typeof source !== 'object') return
+  // Use Object.getOwnPropertyNames to also catch non-enumerable keys, but still filter dangerous ones
+  for (const k of Object.getOwnPropertyNames(source)) {
+    if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
+      const desc = Object.getOwnPropertyDescriptor(source, k)
+      if (desc && desc.enumerable) {
+        target[k] = (source as any)[k]
+      }
+    }
+  }
+}
+
 export function createInteractStore(): InteractStore {
   const values: Record<string, unknown> = {}
   const subs = new Map<string, Set<() => void>>()
@@ -33,14 +47,22 @@ export function createInteractStore(): InteractStore {
 
   return {
     set(key, value) {
+      // Ignore dangerous keys to prevent accidental pollution
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return
       values[key] = value
       persist()
       for (const cb of subs.get(key) ?? []) cb()
     },
     get(key) {
+      // Block access to dangerous keys
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return undefined
       return values[key]
     },
     subscribe(key, cb) {
+      // Ignore subscriptions to dangerous keys
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        return () => {} // no-op unsubscribe
+      }
       if (!subs.has(key)) subs.set(key, new Set())
       subs.get(key)!.add(cb)
       return () => subs.get(key)?.delete(cb)
@@ -50,10 +72,13 @@ export function createInteractStore(): InteractStore {
     },
     hydrate(docId, saved) {
       currentDocId = docId
-      Object.assign(values, saved ?? {})
+      // Clear all previous values to prevent cross-document data contamination
+      for (const k of Object.keys(values)) delete values[k]
+      // Safely merge doc.interactState (base state)
+      safeMerge(values, saved)
       try {
         const cached = localStorage.getItem(`bento:interact:${docId}`)
-        if (cached) Object.assign(values, JSON.parse(cached))
+        if (cached) safeMerge(values, JSON.parse(cached))
       } catch {
         /* corrupt/unavailable cache — fall back to `saved` only */
       }
