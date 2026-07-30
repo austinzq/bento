@@ -638,7 +638,7 @@ export function deriveChartPalette(accent: string): string[] {
 
 // --- table → chart data extraction (shared by creation + live binding) -------
 
-const stripCell = (html: string) =>
+export const stripCell = (html: string) =>
   html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').replace(/,/g, '').trim()
 
 /** First column = x labels; each mostly-numeric column after = a data series. */

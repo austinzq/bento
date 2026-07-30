@@ -4,7 +4,7 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
-import { morphKey } from './model'
+import { morphKey, stripCell } from './model'
 import { chartSnapshotSvg } from './charts'
 import { resolveExprString } from './expr'
 import { interact } from './interact'
@@ -78,12 +78,31 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
   })
 }
 
+/** Names of OTHER computed fields an expression string references
+ *  (`computed.foo` tokens) — the edges of the dependency graph. filter./
+ *  input./params. references are leaf values and don't need ordering. */
+function computedRefs(expr: string): string[] {
+  const names: string[] = []
+  const re = /computed\.([A-Za-z0-9_]+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(expr))) names.push(m[1])
+  return names
+}
+
 /**
  * Collect the binding context for one slide: current filter/input/params
  * values from the interact store, plus this slide's (and the doc's)
- * computed properties evaluated against that same context. Cycle detection:
- * a computed name currently being evaluated that's referenced again
- * resolves to '#ERROR' instead of recursing forever.
+ * computed properties evaluated against that same context.
+ *
+ * Evaluation order follows the DEPENDENCY GRAPH, not object-key insertion
+ * order — a computed field that references another computed field defined
+ * later in the map (or in the other of doc.computed/slide.computed) still
+ * resolves correctly; naive left-to-right evaluation would read an empty
+ * string for a forward reference. Classic DFS with a "visiting" mark (not a
+ * full topological sort — depth-first is enough here): a name currently on
+ * the call stack that gets referenced again is a real cycle, and every name
+ * still "visiting" at that point (the whole cycle, not just the one that
+ * closed the loop) resolves to '#ERROR' — fail-open, never recurses forever.
  */
 export function buildBindingContext(doc: BentoDoc, slide: Slide): Record<string, unknown> {
   const ctx: Record<string, unknown> = { ...interact.snapshot() }
@@ -91,17 +110,25 @@ export function buildBindingContext(doc: BentoDoc, slide: Slide): Record<string,
     for (const [k, v] of Object.entries(slide.paramValues)) ctx[`params.${k}`] = v
   }
   const computedDefs = { ...(doc.computed ?? {}), ...(slide.computed ?? {}) }
-  const evaluating = new Set<string>()
-  const resolveComputed = (name: string): unknown => {
+  const visiting = new Set<string>()
+  const resolveComputed = (name: string): void => {
     const key = `computed.${name}`
-    if (key in ctx) return ctx[key]
-    if (evaluating.has(name)) return '#ERROR'
+    if (key in ctx) return
+    if (visiting.has(name)) {
+      // Cycle closed back on `name`: everyone still on the stack (the whole
+      // cycle) is unresolvable, not just this one node.
+      for (const n of visiting) ctx[`computed.${n}`] = '#ERROR'
+      return
+    }
     const expr = computedDefs[name]
-    if (expr === undefined) return ''
-    evaluating.add(name)
-    ctx[key] = resolveExprString(expr, ctx)
-    evaluating.delete(name)
-    return ctx[key]
+    if (expr === undefined) { ctx[key] = ''; return }
+    visiting.add(name)
+    for (const dep of computedRefs(expr)) resolveComputed(dep)
+    visiting.delete(name)
+    // A cycle detected while resolving a dependency may already have written
+    // '#ERROR' for this name (it was still "visiting" at that moment) — don't
+    // clobber it with a fresh (and now nonsensical) evaluation.
+    if (!(key in ctx)) ctx[key] = resolveExprString(expr, ctx)
   }
   for (const name of Object.keys(computedDefs)) resolveComputed(name)
   return ctx
@@ -119,6 +146,27 @@ export function resolveBindings(html: string, ctx?: Record<string, unknown>): st
 /** Resolve "asset:<key>" references against the document's asset table. */
 export function resolveAsset(doc: BentoDoc, ref: string): string {
   return ref.startsWith('asset:') ? (doc.assets?.[ref.slice(6)] ?? '') : ref
+}
+
+/**
+ * A filter element's live option list, sourced from a table column instead of
+ * a static list: find the table by id across ALL slides, match the header
+ * cell text to `column` (same stripCell convention as tableChartColumns), then
+ * dedupe the body cells in that column. Table not found / column not found →
+ * empty array, never throws (fail-open, same policy as expr evaluation).
+ */
+function optionsFromTable(doc: BentoDoc, source: { tableId: string; column: string }): string[] {
+  const table = doc.slides
+    .flatMap((s) => s.elements)
+    .find((e): e is TableElement => e.type === 'table' && e.id === source.tableId)
+  if (!table) return []
+  const headerRow = table.header ? table.rows[0] : null
+  if (!headerRow) return []
+  const colIdx = headerRow.cells.findIndex((c) => stripCell(c.html ?? '') === source.column)
+  if (colIdx < 0) return []
+  const bodyRows = table.header ? table.rows.slice(1) : table.rows
+  const values = bodyRows.map((r) => stripCell(r.cells[colIdx]?.html ?? ''))
+  return [...new Set(values)]
 }
 
 function svgMarkup(el: SvgElement, doc: BentoDoc): string {
@@ -732,7 +780,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       if (el.kind === 'select' || el.kind === 'multiselect') {
         const sel = document.createElement('select')
         sel.multiple = el.kind === 'multiselect'
-        const opts_ = el.options ?? []
+        const opts_ = el.optionsSource ? optionsFromTable(doc, el.optionsSource) : (el.options ?? [])
         for (const o of opts_) {
           const opt = document.createElement('option')
           opt.value = o; opt.textContent = o
