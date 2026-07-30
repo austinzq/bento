@@ -738,7 +738,12 @@ const sameShape = (a: Opt, b: Opt): boolean => {
  * the chart animates from that state to its own: same series types tween
  * their values in place; a type change (bar⇄pie) plays a staged sweep.
  */
-export function mountChart(el: ChartLike, host: HTMLElement, fromOption?: Record<string, unknown>): () => void {
+export function mountChart(
+  el: ChartLike,
+  host: HTMLElement,
+  fromOption?: Record<string, unknown>,
+  onCategoryClick?: (label: string) => void,
+): () => void {
   host.innerHTML = ''
   if (getComputedStyle(host).position === 'static') host.style.position = 'relative'
   const w = el.w, h = el.h
@@ -753,6 +758,7 @@ export function mountChart(el: ChartLike, host: HTMLElement, fromOption?: Record
     const svg = renderChart(opt, w, h, sweep, view)
     host.prepend(svg)
     wireTooltips(svg, opt)
+    wireClicks(svg, opt)
   }
 
   // tooltip overlay — FIXED to the viewport and parented to <body>, so it is
@@ -788,6 +794,27 @@ export function mountChart(el: ChartLike, host: HTMLElement, fromOption?: Record
       }
     })
     svg.addEventListener('mouseleave', () => { tipEl.style.display = 'none' })
+  }
+
+  // Cross-filter clicks — discrete category charts only (bar/pie). Bar/line
+  // marks carry __cat (a window-relative index into catWindow's `cats`, same
+  // convention wireTooltips already relies on above). Pie slices have no
+  // x-axis categories to index into — d.categories is empty for pie option —
+  // so they fall back to the category name already stashed on __tip.rows[0]
+  // (see renderPie/arcPath: `rows: [{ name: p.name, ... }]`).
+  function wireClicks(svg: SVGSVGElement, opt: Opt) {
+    if (!onCategoryClick) return
+    const d = digest(opt, w, h)
+    svg.addEventListener('click', (ev) => {
+      const target = ev.target as Element & { __cat?: number; __tip?: any }
+      if (typeof target.__cat === 'number') {
+        const { cats } = catWindow(d, view)
+        const label = cats[target.__cat]
+        if (label !== undefined) onCategoryClick(String(label))
+      } else if (target.__tip?.rows?.[0]?.name !== undefined) {
+        onCategoryClick(String(target.__tip.rows[0].name))
+      }
+    })
   }
 
   function showTip(title: string, rows: Array<{ name: string; value?: string; color: string }>, x: number, y: number) {

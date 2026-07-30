@@ -8,6 +8,7 @@ import Reveal from 'reveal.js'
 import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
+import { interact } from './interact'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey } from './model'
 import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
@@ -739,7 +740,19 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
     if (!node) continue
     // a matching chart on the other side of a morph: animate its data over
     const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
-    const dispose = mountChart(el, node, fromEl && fromEl.type === 'chart' ? fromEl.option : undefined)
+    const dispose = mountChart(
+      el,
+      node,
+      fromEl && fromEl.type === 'chart' ? fromEl.option : undefined,
+      el.filterKey
+        ? (label: string) => {
+            interact.set(`filter.${el.filterKey}`, label)
+            // 钻取：交叉筛选 + 现有 link 机制共用同一次点击——el.link 已经在
+            // present.ts 别处的 [data-link] click 监听里处理跳转，这里只需要
+            // 确保 filter 状态先落地，跳转逻辑不用重复实现。
+          }
+        : undefined,
+    )
     handles.push(() => {
       dispose()
       node.innerHTML = chartSnapshotSvg(el)
