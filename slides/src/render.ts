@@ -6,6 +6,8 @@
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey } from './model'
 import { chartSnapshotSvg } from './charts'
+import { resolveExprString } from './expr'
+import { interact } from './interact'
 import temml from 'temml'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -20,6 +22,8 @@ export interface RenderOpts {
   liveMedia?: boolean
   /** dynamic-field values ({{page}} etc.) for this slide; auto-filled by renderSlide */
   fields?: FieldContext
+  /** filter/input/params/computed values for THIS slide render pass. */
+  bindingCtx?: Record<string, unknown>
 }
 
 /** Values dynamic field tokens resolve against, computed per slide. */
@@ -72,6 +76,44 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
       default: return ''
     }
   })
+}
+
+/**
+ * Collect the binding context for one slide: current filter/input/params
+ * values from the interact store, plus this slide's (and the doc's)
+ * computed properties evaluated against that same context. Cycle detection:
+ * a computed name currently being evaluated that's referenced again
+ * resolves to '#ERROR' instead of recursing forever.
+ */
+export function buildBindingContext(doc: BentoDoc, slide: Slide): Record<string, unknown> {
+  const ctx: Record<string, unknown> = { ...interact.snapshot() }
+  if (slide.paramValues) {
+    for (const [k, v] of Object.entries(slide.paramValues)) ctx[`params.${k}`] = v
+  }
+  const computedDefs = { ...(doc.computed ?? {}), ...(slide.computed ?? {}) }
+  const evaluating = new Set<string>()
+  const resolveComputed = (name: string): unknown => {
+    const key = `computed.${name}`
+    if (key in ctx) return ctx[key]
+    if (evaluating.has(name)) return '#ERROR'
+    const expr = computedDefs[name]
+    if (expr === undefined) return ''
+    evaluating.add(name)
+    ctx[key] = resolveExprString(expr, ctx)
+    evaluating.delete(name)
+    return ctx[key]
+  }
+  for (const name of Object.keys(computedDefs)) resolveComputed(name)
+  return ctx
+}
+
+/** Resolve {{filter.x}}/{{input.x}}/{{params.x}}/{{computed.x}} tokens against
+ *  a binding context. Run AFTER resolveFields (page/title/date tokens). */
+export function resolveBindings(html: string, ctx?: Record<string, unknown>): string {
+  if (!ctx || html.indexOf('{{') < 0) return html
+  return html.replace(/\{\{\s*((?:filter|input|params|computed)\.[A-Za-z0-9_]+)\s*\}\}/g, (_m, path: string) =>
+    resolveExprString(path, ctx),
+  )
 }
 
 /** Resolve "asset:<key>" references against the document's asset table. */
@@ -546,7 +588,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       inner.style.lineHeight = String(el.lineHeight)
       if (el.letterSpacing) inner.style.letterSpacing = `${el.letterSpacing}px`
       inner.style.width = '100%'
-      inner.innerHTML = resolveMath(sanitizeHtml(resolveFields(el.html, opts.fields)))
+      inner.innerHTML = resolveMath(sanitizeHtml(resolveBindings(resolveFields(el.html, opts.fields), opts.bindingCtx)))
       // layout placeholder: prompt while empty (editor), gone while presenting
       const isEmpty = !inner.textContent?.trim() && !el.html.includes('<img')
       if (el.placeholder && isEmpty) {
@@ -676,6 +718,63 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       }
       break
     }
+    case 'filter': {
+      node.dataset.filterKey = el.key
+      const wrap = document.createElement('div')
+      wrap.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;gap:4px;justify-content:center'
+      if (el.label) {
+        const lbl = document.createElement('label')
+        lbl.textContent = el.label
+        lbl.style.cssText = 'font-size:12px;opacity:0.7'
+        wrap.appendChild(lbl)
+      }
+      const current = (opts.bindingCtx?.[`filter.${el.key}`] as string) ?? el.default ?? ''
+      if (el.kind === 'select' || el.kind === 'multiselect') {
+        const sel = document.createElement('select')
+        sel.multiple = el.kind === 'multiselect'
+        const opts_ = el.options ?? []
+        for (const o of opts_) {
+          const opt = document.createElement('option')
+          opt.value = o; opt.textContent = o
+          opt.selected = el.kind === 'multiselect' ? current.split(',').includes(o) : current === o
+          sel.appendChild(opt)
+        }
+        sel.addEventListener('change', () => {
+          const value = el.kind === 'multiselect'
+            ? [...sel.selectedOptions].map((o) => o.value).join(',')
+            : sel.value
+          interact.set(`filter.${el.key}`, value)
+        })
+        wrap.appendChild(sel)
+      } else {
+        const input = document.createElement('input')
+        input.type = el.kind === 'date-range' ? 'text' : 'range'
+        input.value = current
+        input.addEventListener('input', () => interact.set(`filter.${el.key}`, input.value))
+        wrap.appendChild(input)
+      }
+      node.appendChild(wrap)
+      break
+    }
+    case 'input': {
+      node.dataset.inputKey = el.key
+      const wrap = document.createElement('div')
+      wrap.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;gap:4px;justify-content:center'
+      if (el.label) {
+        const lbl = document.createElement('label')
+        lbl.textContent = el.label
+        lbl.style.cssText = 'font-size:12px;opacity:0.7'
+        wrap.appendChild(lbl)
+      }
+      const input = document.createElement('input')
+      input.type = el.kind
+      input.placeholder = el.placeholder ?? ''
+      input.value = (opts.bindingCtx?.[`input.${el.key}`] as string) ?? el.default ?? ''
+      input.addEventListener('input', () => interact.set(`input.${el.key}`, input.value))
+      wrap.appendChild(input)
+      node.appendChild(wrap)
+      break
+    }
   }
   return node
 }
@@ -689,7 +788,8 @@ export function renderSlide(slide: Slide, doc: BentoDoc, opts: RenderOpts = {}):
   surface.style.height = `${doc.size.height}px`
   surface.style.background = slide.background
   const fields = opts.fields ?? fieldContext(doc, slide)
-  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, { ...opts, fields }))
+  const bindingCtx = opts.bindingCtx ?? buildBindingContext(doc, slide)
+  for (const el of slide.elements) surface.appendChild(renderElement(el, doc, { ...opts, fields, bindingCtx }))
   return surface
 }
 
