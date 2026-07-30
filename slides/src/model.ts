@@ -931,8 +931,11 @@ export function builtinLayouts(): Slide[] {
 }
 
 /** A fresh slide from a layout — new slide id, element ids KEPT (lineage). */
-export function instantiateLayout(layout: Slide): Slide {
+export function instantiateLayout(layout: Slide, paramValues?: Record<string, string>): Slide {
   const copy: Slide = JSON.parse(JSON.stringify(layout))
+  if (layout.params?.length) {
+    copy.paramValues = { ...paramValues }
+  }
   return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
 }
 
