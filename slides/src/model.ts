@@ -226,6 +226,32 @@ export interface ChartElement extends ElementBase {
   option: Record<string, unknown>
   /** live data binding: xAxis labels + series values track this table element */
   source?: { tableId: string }
+  /** cross-filter: clicking a discrete category writes it to interact store
+   *  under this key (bar/pie only — see spec §4.3 MVP scope note). */
+  filterKey?: string
+}
+
+/** A viewer-facing filter control — writes its current value to the
+ *  interact store under `key`, readable elsewhere as `{{filter.<key>}}`. */
+export interface FilterElement extends ElementBase {
+  type: 'filter'
+  kind: 'select' | 'multiselect' | 'slider' | 'date-range'
+  key: string
+  optionsSource?: { tableId: string; column: string }
+  options?: string[]
+  label?: string
+  default?: string
+}
+
+/** A viewer input box — writes its current value to the interact store
+ *  under `key`, readable elsewhere as `{{input.<key>}}`. */
+export interface InputElement extends ElementBase {
+  type: 'input'
+  kind: 'text' | 'number' | 'date'
+  key: string
+  label?: string
+  placeholder?: string
+  default?: string
 }
 
 /** One cell of a table. `html` is the same sanitized inline subset as text. */
@@ -301,6 +327,7 @@ export interface MediaElement extends ElementBase {
 
 export type SlideElement =
   | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement
+  | FilterElement | InputElement
 
 /**
  * A review comment thread. Editor-only metadata: never rendered while
@@ -347,6 +374,15 @@ export interface Slide {
   hover?: { type: 'focus-group' | 'reveal'; dim?: number; default?: string }
   /** review comment threads (editor-only; see Comment) */
   comments?: Comment[]
+  /** slide-level computed properties: name → whitelisted expression string
+   *  (see expr.ts). Referenced elsewhere as {{computed.<name>}}. */
+  computed?: Record<string, string>
+  /** when this slide is used as a layout (doc.layouts), the named params an
+   *  instance must/can supply; instances read them as {{params.<name>}}. */
+  params?: string[]
+  /** present on a slide INSTANTIATED from a params-bearing layout — the
+   *  concrete values for this instance. */
+  paramValues?: Record<string, string>
 }
 
 export interface BentoDoc {
@@ -486,6 +522,12 @@ export interface BentoDoc {
   readonly?: boolean
   slides: Slide[]
   modified: string
+  /** doc-level computed properties, same semantics as Slide.computed. */
+  computed?: Record<string, string>
+  /** last-saved snapshot of the interact runtime store (filter/input/params
+   *  selections). Only written when the user chooses "保存当前状态到文件";
+   *  a "清空并存为公版模板" save clears this back to undefined. */
+  interactState?: Record<string, unknown>
 }
 
 let counter = 0
