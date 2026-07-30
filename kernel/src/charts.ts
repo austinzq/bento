@@ -801,7 +801,11 @@ export function mountChart(
   // convention wireTooltips already relies on above). Pie slices have no
   // x-axis categories to index into — d.categories is empty for pie option —
   // so they fall back to the category name already stashed on __tip.rows[0]
-  // (see renderPie/arcPath: `rows: [{ name: p.name, ... }]`).
+  // (see renderPie/arcPath: `rows: [{ name: p.name, ... }]`). That fallback
+  // is gated on `d.isPie`: scatter points also carry a shape-alike __tip
+  // (`rows: [{ name: "${x}, ${y}" }]`, see the scatter branch above) but with
+  // no categorical meaning at all — without the isPie guard a scatter click
+  // would silently write its "x, y" coordinate string as the filter value.
   function wireClicks(svg: SVGSVGElement, opt: Opt) {
     if (!onCategoryClick) return
     const d = digest(opt, w, h)
@@ -811,7 +815,7 @@ export function mountChart(
         const { cats } = catWindow(d, view)
         const label = cats[target.__cat]
         if (label !== undefined) onCategoryClick(String(label))
-      } else if (target.__tip?.rows?.[0]?.name !== undefined) {
+      } else if (d.isPie && target.__tip?.rows?.[0]?.name !== undefined) {
         onCategoryClick(String(target.__tip.rows[0].name))
       }
     })
