@@ -1695,7 +1695,12 @@ export class PropsPanel {
    *  building the "pick a table + column" dropdown is out of scope for this task. */
   private buildFilterProps(el: FilterElement) {
     this.section(t('Filter'))
-    this.row('Kind', this.select(['select', 'multiselect', 'slider', 'date-range'], el.kind, (v) =>
+    // slider/date-range are still valid FilterElement.kind values in the
+    // TYPE (existing docs can carry them) — they're just not offered here
+    // yet because that rendering path isn't built. A doc whose kind happens
+    // to be one of them shows this dropdown with nothing preselected, which
+    // is an acceptable transitional state until they land.
+    this.row('Kind', this.select(['select', 'multiselect'], el.kind, (v) =>
       this.mutate(el.id, (e) => { (e as FilterElement).kind = v as FilterElement['kind'] }, true)))
 
     const key = document.createElement('input')

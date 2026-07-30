@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 import type { BentoDoc, Slide, SlideElement } from './model'
+import { interact } from './interact'
 
 export type StoreEvent =
   | 'doc'        // any document mutation
@@ -66,6 +67,13 @@ export class Store {
   replaceDoc(next: BentoDoc) {
     this.checkpoint()
     this.doc = next
+    // Every replaceDoc caller (AI/JSON round-trip loadDoc, "Duplicate as new
+    // deck", crash recovery, version rollback) swaps in a document whose
+    // filter/input keys may not even overlap the previous one — re-hydrate
+    // the runtime interact store against the NEW doc's id/interactState so
+    // stale values from the old document can't leak into it, and so the
+    // localStorage session cache follows the new docId.
+    interact.hydrate(next.docId, next.interactState)
     this.currentIndex = 0
     this.selection = []
     this.setDirty(true)

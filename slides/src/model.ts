@@ -934,7 +934,14 @@ export function builtinLayouts(): Slide[] {
 export function instantiateLayout(layout: Slide, paramValues?: Record<string, string>): Slide {
   const copy: Slide = JSON.parse(JSON.stringify(layout))
   if (layout.params?.length) {
-    copy.paramValues = { ...paramValues }
+    // Always carry every declared param key, defaulting missing/unpassed
+    // ones to '' — not just whatever the caller happened to pass. A caller
+    // that instantiates without paramValues (the common case) previously
+    // got copy.paramValues === {}, and the editor's "component parameters"
+    // panel only shows a section when Object.keys(paramValues).length > 0,
+    // so the panel silently never appeared even though the layout declares
+    // params meant to be edited per-instance.
+    copy.paramValues = Object.fromEntries(layout.params.map((k) => [k, paramValues?.[k] ?? '']))
   }
   return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
 }

@@ -80,8 +80,11 @@ export function resolveFields(html: string, ctx?: FieldContext): string {
 
 /** Names of OTHER computed fields an expression string references
  *  (`computed.foo` tokens) — the edges of the dependency graph. filter./
- *  input./params. references are leaf values and don't need ordering. */
-function computedRefs(expr: string): string[] {
+ *  input./params. references are leaf values and don't need ordering.
+ *  Exported for present.ts, which walks this same graph to expand a
+ *  `computed.X` binding token into the filter/input/params leaf keys it
+ *  actually depends on (see expandComputedToLeaves there). */
+export function computedRefs(expr: string): string[] {
   const names: string[] = []
   const re = /computed\.([A-Za-z0-9_]+)/g
   let m: RegExpExecArray | null
@@ -118,6 +121,19 @@ export function buildBindingContext(doc: BentoDoc, slide: Slide): Record<string,
       const { cols } = tableChartColumns(el)
       for (const col of cols) ctx[`table.${el.id}.${col.name}`] = col.data
     }
+  }
+  // Filter/input elements render their CONTROL using el.default as a
+  // fallback when the interact store has no value yet (see the 'filter'/
+  // 'input' cases below) — but that default was never written into ctx, so
+  // {{filter.x}}/{{input.x}} text elsewhere read an empty string while the
+  // control itself shows the default, a visible mismatch. Backfill ctx here,
+  // BEFORE computed fields resolve, so a computed expression that references
+  // filter.x/input.x sees the same default the control shows. This only
+  // patches the read-side context — it never calls interact.set, so it can't
+  // create a runtime-store side effect from a render pass.
+  for (const el of slide.elements) {
+    if (el.type === 'filter' && ctx[`filter.${el.key}`] === undefined) ctx[`filter.${el.key}`] = el.default ?? ''
+    if (el.type === 'input' && ctx[`input.${el.key}`] === undefined) ctx[`input.${el.key}`] = el.default ?? ''
   }
   const computedDefs = { ...(doc.computed ?? {}), ...(slide.computed ?? {}) }
   const visiting = new Set<string>()
@@ -786,7 +802,14 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
         lbl.style.cssText = 'font-size:12px;opacity:0.7'
         wrap.appendChild(lbl)
       }
-      const current = (opts.bindingCtx?.[`filter.${el.key}`] as string) ?? el.default ?? ''
+      // String(...): opts.bindingCtx can hold whatever doc.interactState (or
+      // the localStorage session cache) last stored — if that was written by
+      // something other than this control (AI edit, hand-edited JSON, an
+      // older/different kind), it may not be a string at all. `current` MUST
+      // be a string because multiselect immediately calls .split(',') on it
+      // below; a non-string there throws and takes the whole slide render
+      // down with it.
+      const current = String((opts.bindingCtx?.[`filter.${el.key}`] as string) ?? el.default ?? '')
       if (el.kind === 'select' || el.kind === 'multiselect') {
         const sel = document.createElement('select')
         sel.multiple = el.kind === 'multiselect'

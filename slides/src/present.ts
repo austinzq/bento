@@ -11,7 +11,7 @@ import { chartSnapshotSvg, mountChart } from './charts'
 import { interact } from './interact'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey } from './model'
-import { applyElementFrame, buildBindingContext, fieldContext, gradientLineCoords, renderElement, renderSlide } from './render'
+import { applyElementFrame, buildBindingContext, computedRefs, fieldContext, gradientLineCoords, renderElement, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
 
@@ -791,10 +791,49 @@ function disposeLiveCharts(_slide: Slide, section: HTMLElement) {
 const BINDING_TOKEN_RE = /\{\{\s*((?:filter|input|params|computed)\.[A-Za-z0-9_]+)\s*\}\}/g
 const bindingHandles = new WeakMap<HTMLElement, () => void>()
 
-function bindingKeysIn(el: SlideElement): string[] {
-  const text = el.type === 'text' ? el.html : ''
+/** A `computed.X` token is never itself an interact-store key — computed.*
+ *  is derived (buildBindingContext resolves it fresh every render) and
+ *  interact.set only ever writes filter.* or input.* — so subscribing to
+ *  "computed.X" would subscribe to a key that never fires. Expand it into
+ *  the filter/input/params leaf keys it actually depends on, walking through
+ *  any chain of other computed fields it references. `seen` guards against
+ *  a cycle in the computed graph turning this into infinite recursion —
+ *  buildBindingContext's own '#ERROR' handling already covers the VALUE side
+ *  of cycles; this only needs to not hang while collecting subscription keys. */
+function expandComputedToLeaves(name: string, doc: BentoDoc, slide: Slide, seen = new Set<string>()): string[] {
+  if (seen.has(name)) return []
+  seen.add(name)
+  const expr = (doc.computed ?? {})[name] ?? (slide.computed ?? {})[name]
+  if (expr === undefined) return []
+  const leaves: string[] = []
+  for (const ref of computedRefs(expr)) leaves.push(...expandComputedToLeaves(ref, doc, slide, seen))
+  for (const m of expr.matchAll(/\b(?:filter|input|params)\.[A-Za-z0-9_]+/g)) leaves.push(m[0])
+  return leaves
+}
+
+/** Every interact-store key a rendered element's output depends on:
+ *  - filter/input elements depend on their OWN key (so the control itself
+ *    re-renders when something ELSE — e.g. a chart cross-filter click —
+ *    changes the same key; previously these elements weren't scanned at all,
+ *    so a <select> never reflected a filter set by clicking a chart).
+ *  - {{filter.x}}/{{input.x}}/{{params.x}} text tokens depend on that key
+ *    directly.
+ *  - {{computed.x}} text tokens do NOT depend on "computed.x" (that key never
+ *    exists in the interact store) — they depend on whatever filter/input
+ *    leaves computed.x's expression resolves to, transitively. */
+function bindingKeysIn(el: SlideElement, doc: BentoDoc, slide: Slide): string[] {
   const keys = new Set<string>()
-  for (const m of text.matchAll(BINDING_TOKEN_RE)) keys.add(m[1])
+  if (el.type === 'filter') keys.add(`filter.${el.key}`)
+  if (el.type === 'input') keys.add(`input.${el.key}`)
+  const text = el.type === 'text' ? el.html : ''
+  for (const m of text.matchAll(BINDING_TOKEN_RE)) {
+    const token = m[1]
+    if (token.startsWith('computed.')) {
+      for (const leaf of expandComputedToLeaves(token.slice('computed.'.length), doc, slide)) keys.add(leaf)
+    } else {
+      keys.add(token)
+    }
+  }
   return [...keys]
 }
 
@@ -803,7 +842,7 @@ function bindingKeysIn(el: SlideElement): string[] {
 function wireBindingReactivity(slide: Slide, section: HTMLElement, doc: BentoDoc): () => void {
   const unsubs: Array<() => void> = []
   for (const el of slide?.elements ?? []) {
-    const keys = bindingKeysIn(el)
+    const keys = bindingKeysIn(el, doc, slide)
     if (!keys.length) continue
     const rerender = () => {
       const nodeEl = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
@@ -813,6 +852,12 @@ function wireBindingReactivity(slide: Slide, section: HTMLElement, doc: BentoDoc
       nodeEl.replaceWith(fresh)
     }
     for (const key of keys) unsubs.push(interact.subscribe(key, rerender))
+    // Mounting a slide only wired FUTURE changes — drill-down (chart click
+    // sets a filter, then navigates to a slide whose DOM predates the click)
+    // and simply revisiting a slide after changing a filter elsewhere both
+    // rendered stale state until the NEXT change happened to fire. Paint once
+    // against current interact state right after subscribing.
+    rerender()
   }
   return () => unsubs.forEach((u) => u())
 }
