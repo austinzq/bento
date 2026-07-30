@@ -149,7 +149,11 @@ export function evalExpr(node: ExprNode, ctx: Record<string, unknown>): unknown 
     case 'str': return node.value
     case 'var': return ctx[node.path] ?? ''
     case 'call': {
-      const vals = node.args.map((a) => num(evalExpr(a, ctx)))
+      // Each arg may resolve to a plain scalar OR a number[] (a table.<id>.<col>
+      // column reference) — flatten arrays so sum(table.sales.amount) reduces
+      // the whole column, while sum(1,2,3) is unaffected.
+      const rawVals = node.args.map((a) => evalExpr(a, ctx))
+      const vals = rawVals.flatMap((v) => (Array.isArray(v) ? v.map(num) : [num(v)]))
       switch (node.name) {
         case 'sum': return vals.reduce((a, b) => a + b, 0)
         case 'avg': return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0

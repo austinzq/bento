@@ -15,6 +15,7 @@ register(new URL('./ts-ext-loader.mjs', import.meta.url))
 
 const { buildBindingContext } = await import('../slides/src/render.ts')
 const { interact } = await import('../slides/src/interact.ts')
+const { evalExpr, parseExpr } = await import('../slides/src/expr.ts')
 
 let failures = 0
 let checks = 0
@@ -57,6 +58,49 @@ console.log('自环：a 引用自己…')
     emptySlide,
   )
   ok(ctx['computed.a'] === '#ERROR', 'self-referencing computed field resolves to #ERROR, never recurses forever')
+}
+
+console.log('table.<tableId>.<column> 聚合：buildBindingContext 用 tableChartColumns 填充列数据…')
+{
+  // 真实 TableElement 结构：header 行 + 3 行数字数据。tableChartColumns（复用
+  // 自 model.ts，syncLinkedChart 已在用）负责"表头文本→列名 + 数字列提取"，
+  // buildBindingContext 不重新实现这套逻辑，只是把结果写进 ctx。
+  // expr.ts 的分词器目前只认 [A-Za-z0-9_.]（不支持中文标识符——这是分词器本身
+  // 既有的限制，跟本次改动无关，不在本task范围内），所以这里表头列名用英文，
+  // 跟task描述里的 sum(table.sales.amount) 示例保持一致，也是真实用法。
+  const cell = (html: string) => ({ html })
+  const table = {
+    id: 'sales',
+    type: 'table',
+    header: true,
+    columns: [{ w: 1 }, { w: 1 }, { w: 1 }],
+    rows: [
+      { cells: [cell('产品'), cell('amount'), cell('tax')] },
+      { cells: [cell('A'), cell('100'), cell('10')] },
+      { cells: [cell('B'), cell('200'), cell('20')] },
+      { cells: [cell('C'), cell('300'), cell('15')] },
+    ],
+  } as any
+  const doc = { computed: {}, slides: [{ elements: [table] }] } as any
+  const slide = doc.slides[0]
+  const ctx = buildBindingContext(doc, slide)
+
+  ok(Array.isArray(ctx['table.sales.amount']), 'ctx carries the column as a number[], not a string')
+  ok(JSON.stringify(ctx['table.sales.amount']) === JSON.stringify([100, 200, 300]), '列数据按行序正确提取')
+  ok(JSON.stringify(ctx['table.sales.tax']) === JSON.stringify([10, 20, 15]), '第二个数字列也被提取')
+
+  ok(evalExpr(parseExpr('sum(table.sales.amount)'), ctx) === 600, 'sum(table.sales.amount) 对整列求和 = 600')
+  ok(evalExpr(parseExpr('avg(table.sales.amount)'), ctx) === 200, 'avg(table.sales.amount) = 200')
+  ok(evalExpr(parseExpr('count(table.sales.amount)'), ctx) === 3, 'count(table.sales.amount) = 3')
+  ok(evalExpr(parseExpr('min(table.sales.amount)'), ctx) === 100, 'min(table.sales.amount) = 100')
+  ok(evalExpr(parseExpr('max(table.sales.amount)'), ctx) === 300, 'max(table.sales.amount) = 300')
+  ok(evalExpr(parseExpr('sum(table.sales.amount, table.sales.tax)'), ctx) === 645,
+    '多列参数合并求和 = 600 + 45')
+
+  ok(evalExpr(parseExpr('sum(table.sales.missing)'), ctx) === 0,
+    '列名对不上时 ctx 里没有对应 key，var 解析成 "" → num("") = 0，不抛异常')
+  ok(evalExpr(parseExpr('sum(table.nosuchtable.amount)'), ctx) === 0,
+    'tableId 对不上时同样 fail-open 成 0')
 }
 
 console.log('健全性检查：interact store 没有因为这几次调用被污染…')

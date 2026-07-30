@@ -4,7 +4,7 @@
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
 import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
-import { morphKey, stripCell } from './model'
+import { morphKey, stripCell, tableChartColumns } from './model'
 import { chartSnapshotSvg } from './charts'
 import { resolveExprString } from './expr'
 import { interact } from './interact'
@@ -108,6 +108,16 @@ export function buildBindingContext(doc: BentoDoc, slide: Slide): Record<string,
   const ctx: Record<string, unknown> = { ...interact.snapshot() }
   if (slide.paramValues) {
     for (const [k, v] of Object.entries(slide.paramValues)) ctx[`params.${k}`] = v
+  }
+  // table.<tableId>.<column> → number[] for the whitelisted aggregate functions
+  // (sum/avg/count/min/max) to consume. Column extraction is shared with the
+  // chart-linking path via tableChartColumns — never re-derive it here.
+  for (const s of doc.slides) {
+    for (const el of s.elements) {
+      if (el.type !== 'table') continue
+      const { cols } = tableChartColumns(el)
+      for (const col of cols) ctx[`table.${el.id}.${col.name}`] = col.data
+    }
   }
   const computedDefs = { ...(doc.computed ?? {}), ...(slide.computed ?? {}) }
   const visiting = new Set<string>()
