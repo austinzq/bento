@@ -11,7 +11,7 @@ import { chartSnapshotSvg, mountChart } from './charts'
 import { interact } from './interact'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
 import { morphKey } from './model'
-import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
+import { applyElementFrame, buildBindingContext, fieldContext, gradientLineCoords, renderElement, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
 
@@ -525,6 +525,12 @@ export function startPresentation(
     pauseMediaIn(slidesEl) // stop any playing clip before teardown
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     const last = deck.getIndices().h
+    // interact subscriptions live in a module-level singleton, independent of
+    // the DOM — overlay.remove() below would otherwise leak every binding
+    // wired for the currently-shown slide (it'd keep firing on stale, detached
+    // sections for as long as the app stays open).
+    const lastSection = slidesEl.children[last] as HTMLElement | undefined
+    if (lastSection) disposeBindingReactivity(lastSection)
     try {
       deck.destroy()
     } catch {
@@ -656,6 +662,8 @@ export function startPresentation(
     wireHoverFocus(doc.slides[toIdx], to)
     if (from) disposeLiveCharts(doc.slides[fromIdx], from)
     mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
+    if (from) disposeBindingReactivity(from)
+    bindingHandles.set(to, wireBindingReactivity(doc.slides[toIdx], to, doc))
     if (from) pauseMediaIn(from)
     startMediaIn(to)
     // Capture where this slide's formula symbols sit WHILE it is on screen —
@@ -702,6 +710,7 @@ export function startPresentation(
       // here or the very first morph would have no from-side to travel from
       cacheSlideSymbols(doc, first, startIndex)
       mountLiveCharts(doc.slides[startIndex], first)
+      bindingHandles.set(first, wireBindingReactivity(doc.slides[startIndex], first, doc))
       startMediaIn(first)
     }
   })
@@ -769,6 +778,48 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
 function disposeLiveCharts(_slide: Slide, section: HTMLElement) {
   for (const h of chartHandles.get(section) ?? []) h()
   chartHandles.delete(section)
+}
+
+// --- binding reactivity -------------------------------------------------------
+
+// Present mode subscribes each element that references a filter/input/params/
+// computed key to just that key, so a change re-renders only the dependent
+// element instead of the whole slide (which would replay entrance fx, reset
+// scroll position, etc. on unrelated elements). Mirrors the chartHandles
+// WeakMap pattern above: keyed by section so leaving the slide can unwind
+// exactly the subscriptions that slide's wiring created.
+const BINDING_TOKEN_RE = /\{\{\s*((?:filter|input|params|computed)\.[A-Za-z0-9_]+)\s*\}\}/g
+const bindingHandles = new WeakMap<HTMLElement, () => void>()
+
+function bindingKeysIn(el: SlideElement): string[] {
+  const text = el.type === 'text' ? el.html : ''
+  const keys = new Set<string>()
+  for (const m of text.matchAll(BINDING_TOKEN_RE)) keys.add(m[1])
+  return [...keys]
+}
+
+/** Subscribe each element with binding tokens to its dependencies; on change,
+ *  re-render just that element (not the whole slide). Returns a cleanup fn. */
+function wireBindingReactivity(slide: Slide, section: HTMLElement, doc: BentoDoc): () => void {
+  const unsubs: Array<() => void> = []
+  for (const el of slide?.elements ?? []) {
+    const keys = bindingKeysIn(el)
+    if (!keys.length) continue
+    const rerender = () => {
+      const nodeEl = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (!nodeEl) return
+      const ctx = buildBindingContext(doc, slide)
+      const fresh = renderElement(el, doc, { fields: fieldContext(doc, slide), bindingCtx: ctx })
+      nodeEl.replaceWith(fresh)
+    }
+    for (const key of keys) unsubs.push(interact.subscribe(key, rerender))
+  }
+  return () => unsubs.forEach((u) => u())
+}
+
+function disposeBindingReactivity(section: HTMLElement) {
+  bindingHandles.get(section)?.()
+  bindingHandles.delete(section)
 }
 
 // --- element fx -------------------------------------------------------------
