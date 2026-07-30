@@ -27,6 +27,7 @@ import { t, setLocale, locale, localeChoices, LOCALE_CHOICES, applyDirection, is
 import { availablePacks, fetchPack, markFileSaved, packCoverage, packsInFile, stageForFile, unstageFromFile } from '../packs'
 import { appConfig } from '../../../kernel/src/app.ts'
 import { disconnectOnline, joinFromDoc, mintCollab, mintInvite, onlineTransport, rotateKeys, sharingOn, startSharing, stopSharing } from '../sync/online'
+import { interact } from '../interact'
 
 const i18nT = t
 
@@ -932,6 +933,7 @@ export class Editor {
     clone.template = true
     delete clone.collab // instances mint their own credentials
     delete (clone as { docId?: string }).docId
+    delete clone.interactState // template instances start with a clean runtime state
     try {
       const ok = await writeUpdatedFileAs(serializeFile(clone), clone, { suffix: 'template' })
       if (ok) this.toast(t('Template saved — every open of it starts a fresh deck'))
@@ -2300,6 +2302,9 @@ export class Editor {
     // shared docs persist their CRDT state so the saved copy can rejoin
     // as a true fork later (offline edits merge both ways)
     this.session?.stampInto(this.store.doc)
+    // bake the live interact runtime state (filter/input/params/computed) into
+    // the doc so it round-trips through save/reload like any other field
+    this.store.doc.interactState = interact.snapshot()
     try {
       const result = await saveFile(this.store.doc, forcePicker)
       if (result === 'cancelled') return
