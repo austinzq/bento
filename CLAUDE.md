@@ -108,6 +108,53 @@ names provisional.
   authors edit the field, not the computed value. The starter deck's furniture +
   ghost numerals use `{{page:2}}` (they can't drift). Groundwork for the office
   suite's field/cross-reference system.
+- **Interactive bindings (BI-style)** — `src/interact.ts` + `src/expr.ts` +
+  `render.ts`'s `buildBindingContext`/`resolveBindings` + `present.ts`'s
+  `bindingKeysIn`/`wireBindingReactivity`/`expandComputedToLeaves`. New
+  `SlideElement` types `filter`/`input` write a value into a runtime
+  `interact` store under `filter.<key>`/`input.<key>` (present-mode only;
+  the module-level singleton in `interact.ts`, hydrated by `main.ts`/
+  `store.ts` on load/`replaceDoc`); `ChartElement.filterKey` makes a bar/pie
+  click do the same (cross-filter — line/scatter excluded, `charts.ts`'s
+  `onCategoryClick` gates on `d.isPie` so a scatter's shape-alike `__tip`
+  never misfires as a category). `Slide.computed`/`doc.computed` are
+  `Record<name, exprString>`, evaluated fresh every render by `expr.ts` — a
+  **hand-written recursive-descent parser, never eval/Function**, whitelist
+  of exactly five functions (`sum/avg/count/min/max`), `+`/`-`/`*`/`/` always
+  numeric (no string concat), unresolved vars → `''`, parse/eval failure →
+  the literal `{{src}}` text back (fail-open, same policy as `resolveFields`).
+  `table.<tableId>.<columnHeader>` resolves to a `number[]` (shares
+  `tableChartColumns` with the chart↔table live-link feature) — only
+  meaningful inside an aggregate call, `sum()`'s array-flattening is what
+  makes `sum(table.t.Count)` differ from `sum(1,2,3)`. Cycle in `computed`
+  → every name on the cycle resolves to `'#ERROR'` (DFS with a "visiting"
+  set, not a full toposort — `buildBindingContext`'s comment has the why).
+  Binding tokens `{{filter.x}}`/`{{input.x}}`/`{{params.x}}`/`{{computed.x}}`
+  resolve ONLY in a `text` element's `html` (`render.ts` line ~672, right
+  after `resolveFields` — table cells/chart options/svg markup never see
+  them). `Slide.params: string[]` + `paramValues: Record<string,string>` is
+  the reusable-component idiom: a `doc.layouts` slide declares params, an
+  instantiated slide (`instantiateLayout`) stamps concrete `paramValues` —
+  scope is the WHOLE SLIDE, not per-element, so independently-parameterized
+  repeats need one layout each. Present mode wires reactivity narrowly:
+  `bindingKeysIn` finds every key an element's output depends on
+  (`computed.x` tokens expand through the whole computed dependency chain
+  down to `filter.*`/`input.*`/`params.*` leaves via `expandComputedToLeaves`
+  — `computed.*` is NEVER an actual interact-store key, `interact.set` only
+  ever writes `filter.*`/`input.*`), then `wireBindingReactivity` subscribes
+  and re-renders ONLY that element on change (not the whole slide — would
+  replay entrance fx). Persistence is two-layer: a 200ms-debounced
+  `localStorage['bento:interact:<docId>']` session cache (survives a reload
+  of the same file in the same browser) plus `doc.interactState` (a plain
+  snapshot baked in by every regular `save()`; `saveAsTemplate()` deletes it
+  so a distributed template opens with a clean state, not the author's last
+  demo click). `.bento-el-filter`/`.bento-el-input` in `styles.css` render as
+  an OPAQUE white pill (not the translucent frosted-glass treatment used
+  elsewhere) — those controls must read on any slide background, not just a
+  dark one. Full authoring reference: `docs/format.md` § Interactive
+  bindings (normative) and `docs/agents.md` § Interactive bindings
+  (recipes/guardrails) — keep both in sync with this bullet when the
+  feature changes.
 - `src/editor/clipboard.ts` (v0.9.9) — system-clipboard copy/paste. Bento content
   is written as JSON tagged `__bento:"clip"` (kind elements|slides) with referenced
   assets/fonts embedded, so it round-trips across decks/tabs; asset-key collisions

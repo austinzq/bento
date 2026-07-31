@@ -1,7 +1,9 @@
 # The `bento/slides` document format
 
 *Normative reference for the JSON document model, current as of bento/slides
-**v1.0.6** (format version `1`). The authoritative source is
+**v1.0.11** (format version `1`), including the BI-style interactive-bindings
+feature (`filter`/`input` elements, chart cross-filter, `computed`,
+`params`/`paramValues`). The authoritative source is
 [`slides/src/model.ts`](../slides/src/model.ts) — this document tracks it. If
 the two disagree, the code wins; please file that as a docs bug.*
 
@@ -65,6 +67,8 @@ the string `</script>` can never appear and terminate the block.
 | `assets?` | `Record<string,string>` | no | Shared blobs (raw SVG markup or `data:` URIs), referenced by key as `"asset:<key>"`. |
 | `fonts?` | `Array<{ family, asset, weight?, style? }>` | no | Embedded `@font-face`s injected at boot; `asset` is a key into `assets` (a woff2 data URI). |
 | `layouts?` | `Slide[]` | no | Slide-shaped templates (see [Layouts](#layouts)). Absent = the built-in starter layouts are offered. |
+| `computed?` | `Record<string,string>` | no | Doc-level computed properties: name → restricted expression string. See [Interactive bindings](#interactive-bindings). |
+| `interactState?` | `Record<string,unknown>` | no | Last-saved snapshot of the runtime filter/input/params store. See [Interactive bindings](#interactive-bindings). |
 | `collab?` | `Collab` | no | Live-collaboration credentials + CRDT state (see [Collaboration fields](#collaboration-fields)). |
 | `template?` | `boolean` | no | Template file: every open mints a fresh `docId` and drops `collab` (see [File modes](#file-modes)). |
 | `readonly?` | `boolean` | no | Player file: boots straight into the presentation, no editor. |
@@ -95,6 +99,9 @@ the string `</script>` can never appear and terminate the block.
 | `stateOf?` | `string` | no | Marks this slide a hidden *state* variant of the slide with this id (see [Interactive states](#interactive-states)). |
 | `hover?` | `{ type, dim?, default? }` | no | Present-mode hover behaviour: `type: 'focus-group'` (dim elements outside the hovered group) or `'reveal'` (`showOnHover` set swap; `default` names the resting set). |
 | `comments?` | `Comment[]` | no | Review threads. Editor-only — never rendered in present/print, but saved in the file. |
+| `computed?` | `Record<string,string>` | no | Slide-level computed properties — same shape as `doc.computed`, and **wins over** a doc-level entry of the same name. See [Interactive bindings](#interactive-bindings). |
+| `params?` | `string[]` | no | Only meaningful on a slide living in `doc.layouts`: named parameters an instance must/can supply. Instances read them as `{{params.<name>}}`. |
+| `paramValues?` | `Record<string,string>` | no | Present on a slide instantiated from a params-bearing layout — this instance's concrete values. |
 
 ### `Comment`
 
@@ -130,7 +137,7 @@ Every element carries the common `ElementBase` fields, plus type-specific ones.
 | `role?` | `string` | Layout role (`title`/`subtitle`/`body`/`kicker` by convention) — drives cross-layout content moves. Free-form. |
 
 The element `type` discriminant is one of: `text`, `shape`, `image`, `svg`,
-`chart`, `table`, `media`.
+`chart`, `table`, `media`, `filter`, `input`.
 
 ### `text`
 
@@ -184,6 +191,14 @@ presenting.
 - `preset?`: `bar | line | pie | scatter` — the panel's re-seed key.
 - `source?`: `{ tableId }` — live binding; the chart's labels + series values
   track that table element (data only; styling/axes preserved).
+- `filterKey?`: `string` — **cross-filter**. In present mode, clicking a
+  category (a bar, or a pie slice) writes its label into the interact store as
+  `filter.<filterKey>`, readable anywhere as `{{filter.<filterKey>}}` (see
+  [Interactive bindings](#interactive-bindings)). **Bar and pie only** — line
+  points aren't discrete categories in the click handler and scatter points
+  are explicitly excluded (no categorical meaning). Clicking also still fires
+  the element's own `link`, if set — cross-filter and drill-down compose on
+  the same click.
 
 **Chart rules that bite:**
 
@@ -226,6 +241,220 @@ takes `poster?` (`data:`/`asset:`/URL), `fit?` (`contain|cover|fill`),
 - Embed only **short** clips. The editor warns above `MEDIA_EMBED_BUDGET`
   (8 MB) and offers a URL instead — a big data URI makes the file slow to open
   and save.
+
+### `filter`
+
+`type: "filter"` — a viewer-facing control. Its current value lives in the
+runtime **interact store** under `filter.<key>`, readable anywhere in the
+document as `{{filter.<key>}}` (see [Interactive bindings](#interactive-bindings)
+for the full binding/reactivity model).
+
+| Field | Type | Notes |
+|---|---|---|
+| `kind` | `select \| multiselect \| slider \| date-range` | Control widget. `select`/`multiselect` render a real `<select>`; `slider` renders `<input type="range">`; **`date-range` currently renders a plain `<input type="text">`** — there is no dedicated range-picker widget yet, so treat it as free text unless you also constrain it via a `pattern`-less convention in your own copy. |
+| `key` | `string` | The interact-store key (`filter.<key>`). Unique per document; two filter elements sharing a `key` drive the *same* value (useful for "the same filter on two slides"). |
+| `options?` | `string[]` | Static option list for `select`/`multiselect`. |
+| `optionsSource?` | `{ tableId, column }` | Live option list instead: dedupe the values in that table's column (matched by header text). Table is looked up across **all** slides, not just the current one. |
+| `label?` | `string` | Small caption rendered above the control. |
+| `default?` | `string` | Value used when the interact store has nothing for this key yet — shown by the control **and** backfilled into `{{filter.<key>}}` reads elsewhere (see below), so a viewer who never touches the control still sees a consistent default everywhere. |
+
+`multiselect` stores its value as a **single comma-joined string**
+(`"a,b,c"`), not an array — `{{filter.<key>}}` renders that literal string.
+
+### `input`
+
+`type: "input"` — a viewer-facing free-value box. Same store mechanics as
+`filter`, under the `input.<key>` namespace (`{{input.<key>}}`).
+
+| Field | Type | Notes |
+|---|---|---|
+| `kind` | `text \| number \| date` | Sets the underlying `<input type>`. |
+| `key` | `string` | The interact-store key (`input.<key>`). |
+| `label?` | `string` | Small caption above the box. |
+| `placeholder?` | `string` | Native input placeholder. |
+| `default?` | `string` | Same backfill semantics as `filter.default`. |
+
+---
+
+## Interactive bindings
+
+**Added in the BI-style interactivity feature** (filter/input controls,
+chart cross-filter, computed properties, parameterized layout instances).
+This is the mechanism behind `{{filter.x}}` / `{{input.x}}` / `{{params.x}}`
+/ `{{computed.x}}` tokens, `chart.filterKey`, `slide.computed` /
+`doc.computed`, and `slide.params` / `slide.paramValues`.
+
+### The interact store
+
+A single in-memory, present-mode-only key/value store (module singleton, one
+per open document) with four **namespaces**, distinguished only by the key
+prefix — there is no separate schema per namespace, it's just string keys:
+
+| Prefix | Written by | Meaning |
+|---|---|---|
+| `filter.<key>` | A `filter` element's control, or a chart's `filterKey` click | Viewer-chosen filter value |
+| `input.<key>` | An `input` element's control | Viewer-typed free value |
+| `params.<name>` | Never written at runtime — derived from `slide.paramValues` | A layout instance's fixed parameter value |
+| `computed.<name>` | Never written at runtime — derived every render | The evaluated result of a `computed` expression |
+
+Only `filter.*` and `input.*` are ever actually stored/set at runtime;
+`params.*` and `computed.*` are synthesized fresh into the **binding
+context** on every render (see below) — `interact.set('computed.x', …)` is
+not a thing.
+
+**Persistence, two layers:**
+1. **Session cache** — every `interact.set` debounce-writes the whole store
+   to `localStorage['bento:interact:<docId>']` (200ms), so a reload of the
+   *same* file in the *same* browser restores where the viewer left off.
+2. **File** — `doc.interactState` is a plain snapshot object. A regular save
+   bakes the live store into it (`interact.snapshot()`), so the state travels
+   with the file and a fresh reader in a fresh browser sees it too. **"Save
+   as Template"** deletes `interactState` — a template's first open should be
+   pristine, not carrying the author's last filter selection. On load,
+   `interact.hydrate(docId, doc.interactState)` seeds the store from the file
+   and then **overlays** anything in the local session cache for that
+   `docId` (session cache wins for the same doc+browser; a different
+   doc/browser gets exactly what the file shipped with).
+
+Nothing in this system ever touches the undo stack or the document's
+`modified` field on its own — filter/input clicks are ephemeral runtime
+state until a save.
+
+### Binding tokens — `{{filter.x}}`, `{{input.x}}`, `{{params.x}}`, `{{computed.x}}`
+
+Resolved **only inside a `text` element's `html`** — table cells, chart
+`option` strings (tooltip formatters etc.), and svg markup do **not** resolve
+these tokens; put bound values in a `text` element instead (they still stack
+freely — a `text` element can sit right beside a table).
+
+Resolution runs *after* the `{{page}}`/`{{title}}`/… dynamic-field pass (see
+the `text` element section above) — both use the same `{{...}}` mustache
+syntax but are two independent regexes; a `{{page}}` token is untouched by
+binding resolution and vice versa.
+
+`{{computed.foo}}` is the one token whose value is never read directly out
+of the interact store — it's evaluated fresh (see below) — but it's still
+written with the same `{{computed.<name>}}` syntax as the others.
+
+### `computed` — restricted expressions
+
+`doc.computed` / `slide.computed` are `Record<string,string>`: a name maps
+to a **restricted expression string**, evaluated fresh on every render (never
+cached, never itself written to `interact` — see above). Slide-level entries
+win over a doc-level entry of the same name (an instance can override a
+layout's default formula).
+
+The grammar (hand-written recursive-descent parser in `slides/src/expr.ts`,
+**no `eval`/`Function`, ever** — a document is data, never code):
+
+```
+expr       := ternary
+ternary    := comparison ('?' ternary ':' ternary)?
+comparison := additive (('==' | '!=' | '>' | '<' | '>=' | '<=') additive)*
+additive   := multiplicative (('+' | '-') multiplicative)*
+multiplicative := primary (('*' | '/') primary)*
+primary    := NUMBER | STRING | '(' ternary ')' | IDENT | IDENT '(' args? ')'
+```
+
+- **Numbers**: bare digits (`42`, `3.14`).
+- **Strings**: single- or double-quoted (`'CTA'`, `"华东"`). No escapes.
+- **Variables**: a dotted identifier resolved against the same **binding
+  context** the `{{…}}` tokens use — `filter.region`, `input.budget`,
+  `params.tier`, `computed.other`, or `table.<tableId>.<columnHeader>`
+  (below). An unresolved variable reads as `''` (empty string), never throws.
+- **Functions**: **whitelist of exactly five**: `sum`, `avg`, `count`, `min`,
+  `max`. Any other call name is a parse error. Arguments that resolve to an
+  array (a `table.*.*` column reference) are flattened before aggregating, so
+  `sum(table.sales.amount)` sums the whole column while `sum(1,2,3)` sums the
+  literal three arguments — both are valid uses of the same function.
+- **Arithmetic** (`+ - * /`) is **always numeric** — both sides are coerced
+  with `parseFloat` (non-numeric → `0`). **There is no string concatenation
+  operator.** To combine text with a value, don't reach for `+`; put the
+  literal text around a `{{computed.x}}` token in the `text` element's `html`
+  instead (`"合计：{{computed.total}} 项"`), or use the ternary to pick between
+  two whole strings.
+- **Comparisons** (`== != > < >= <=`) compare numerically if *both* sides
+  look numeric (a real number, or a string that round-trips through `Number`
+  cleanly); otherwise they compare as strings lexicographically. `==`/`!=`
+  are always a plain `===`/`!==` (no numeric coercion) — `filter.region ==
+  '华东'` compares strings, `computed.total > 100` compares numbers.
+- **Division by zero** returns `0`, not `Infinity`/`NaN` (fail-open).
+- **Cycles**: if `computed.a` references `computed.b` which references
+  `computed.a`, every name on that cycle resolves to the literal string
+  `'#ERROR'` — it never recurses forever.
+- **Any parse or eval failure** (bad syntax, etc.) makes the token resolve
+  back to its own **literal source text** wrapped in braces (e.g.
+  `{{typo(}}`) — the same fail-open policy as the `{{page}}` resolver. A
+  broken expression is visibly broken, never a thrown error that blanks the
+  slide.
+
+### `table.<tableId>.<columnHeader>` — reading a table into an expression
+
+Every `table` element's columns are exposed in the binding context, keyed by
+the table's `id` and its **header cell text** (via the same column-extraction
+`tableChartColumns` used for chart↔table live linking) — e.g. a table with
+`id: "capTable"` and a header row `Area | Count` exposes
+`table.capTable.Count` as a `number[]`, one entry per body row. Only numeric
+columns are exposed this way (matching the chart-linking rules — non-numeric
+columns aren't included). Use it inside an aggregate function:
+`"sum(table.capTable.Count)"`, `"avg(table.capTable.Count)"`,
+`"max(table.capTable.Count)"`. Referencing the bare name outside a whitelisted
+function (`"table.capTable.Count"` alone) yields the array's string form —
+always wrap it in `sum`/`avg`/`count`/`min`/`max`.
+
+### `params` / `paramValues` — reusable parameterized components
+
+A slide living in `doc.layouts` can declare `params: string[]` — named slots
+its own text can reference as `{{params.<name>}}` (e.g. a KPI-card layout
+declares `params: ["region", "value", "delta"]` and its number text reads
+`{{params.value}}`). **Params live on the whole slide, not per-element** — a
+layout with three independent stat cards on one slide draws from one shared
+`paramValues` bag, not per-card values; if you need independently
+parameterized cards, give each its own layout (its own slide).
+
+Instantiating that layout (`instantiateLayout(layout, paramValues)`) copies
+the slide (keeping element ids, per the normal layout-instantiation rule) and
+stamps `paramValues: Record<string,string>` on the copy — one concrete string
+per declared param name (missing entries backfill to `''`, never `undefined`,
+so the panel's "has values" check is stable). Two slides instantiated from
+the same layout with different `paramValues` are two different "component
+instances" sharing one visual design — this is the format's answer to a
+reusable Vue-like component: the layout is the template, `paramValues` is the
+props object.
+
+### Reactivity (present mode only)
+
+All of the above — control writes, chart cross-filter clicks, computed
+re-evaluation, binding-token re-render — **only runs while presenting**. On
+the editor canvas, a `filter`/`input` element shows its `default`/current
+value as an inert control preview; `{{filter.x}}` etc. tokens resolve once
+against whatever is currently in the store (or the element defaults) but
+don't live-update as you edit other elements.
+
+In present mode, each element that references a binding key subscribes to
+exactly that key and re-renders **only itself** on change (not the whole
+slide — that would replay entrance animations and reset scroll position on
+unrelated elements). A `{{computed.x}}` token doesn't subscribe to a
+`"computed.x"` store key (that key is never written); it's expanded, through
+the whole chain of computed-referencing-computed, down to the concrete
+`filter.*`/`input.*`/`params.*` leaves the formula actually reads — so a text
+element only re-renders when a value its computed formula *actually depends
+on* changes.
+
+### Known limitations (MVP scope)
+
+- Chart cross-filter (`filterKey`) works on **bar and pie only** — not line,
+  not scatter.
+- `filter`/`input` values are **whole-document scope** — there is no
+  per-slide or per-group instancing; two controls sharing a `key` anywhere in
+  the deck always drive the same value.
+- Binding tokens resolve in `text` element `html` only — not in table cells,
+  chart option strings, or svg markup.
+- `date-range` is a plain text input today, not a calendar range-picker.
+- Under live collaboration, `doc.interactState` isn't itself CRDT-merged
+  (it's a plain snapshot field, same class of field as everything outside the
+  CRDT-tracked slide/element tree) — treat it as last-writer-wins across
+  concurrent editors, same as any other non-collab-aware document field.
 
 ---
 
@@ -328,6 +557,8 @@ JSON in the block, so the splice contract holds.
    Generators must emit deterministic ids.
 3. The data-block JSON stays `<`-escaped; text HTML and chart options stay pure
    data (no functions, sanitized HTML) — a document can never smuggle code.
+   `computed` expression strings follow the same rule: a restricted grammar
+   evaluated by a hand-written parser, never `eval`/`Function`.
 4. Asset references are `asset:` keys into `doc.assets`; a self-contained file
    fetches nothing external at view time.
 5. Motion paths are stored **relative** to the element's rest position; the

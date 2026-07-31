@@ -77,6 +77,9 @@ each kind of content to the feature built for it:
 | **every cover / section divider** | at least **one ambient motion** (ken-burns, an orbiting accent) | a still cover is a missed first impression |
 | **repeated chrome / a logo** | keep its `id` stable across slides | it morphs in place instead of popping on every slide |
 | a **demo clip / recording / soundbite** | a **media** element (embed short, link long) | a live video/audio beats a screenshot of one |
+| a viewer should be able to **slice the same chart/table by category** (region, product, scenario) | a **filter** element + `chart.filterKey` / `{{filter.x}}` bindings | one live slide beats five near-duplicate static ones |
+| a **KPI/stat card repeated with different numbers** (per region, per product, per rep) | a **params-bearing layout** instantiated per instance | one design, many `paramValues` — edit the template once, every instance updates |
+| a **derived total/average** that should track live filters or table edits | a **`computed`** expression (`sum(table.<id>.<col>)`, …) | the number recalculates instead of going stale |
 
 ### Copy-paste recipes
 
@@ -116,6 +119,56 @@ each kind of content to the feature built for it:
     "fontSize":18,"color":"#1E2A3A","radius":10} }
 ```
 
+**A cross-filtered bar chart with a live total** — click a bar, the bound text and the sum both update (present mode only; see the Interactive bindings section below for the full model):
+```json
+{ "id":"capTable","type":"table","x":80,"y":260,"w":300,"h":340,"rotation":0,"opacity":1,"header":true,
+  "columns":[{"w":1.6},{"w":1}],
+  "rows":[
+    { "cells":[{"html":"Area"},{"html":"Count","align":"right"}] },
+    { "cells":[{"html":"软件开发"},{"html":"17","align":"right"}] },
+    { "cells":[{"html":"数据处理"},{"html":"5","align":"right"}] } ],
+  "style":{"headerBg":"#123C73","headerColor":"#fff","borderColor":"#DFE6F0","borderWidth":1,"cellPadX":10,"cellPadY":6,"fontSize":12,"color":"#132A43","radius":8} },
+{ "id":"cap-chart","type":"chart","x":420,"y":250,"w":740,"h":340,"rotation":0,"opacity":1,"preset":"bar",
+  "source":{"tableId":"capTable"},"filterKey":"area",
+  "option":{"xAxis":{"type":"category","data":["软件开发","数据处理"]},"yAxis":{"type":"value"},
+    "series":[{"type":"bar","data":[17,5]}]} },
+{ "id":"filter-status","type":"text","x":420,"y":610,"w":600,"h":40,"rotation":0,"opacity":1,
+  "html":"已选中板块：{{filter.area}}","fontSize":18,"fontWeight":600,"color":"#123C73","align":"left","valign":"top","lineHeight":1.2 },
+{ "id":"total-text","type":"text","x":420,"y":650,"w":600,"h":40,"rotation":0,"opacity":1,
+  "html":"合计：{{computed.total}} 项","fontSize":18,"fontWeight":600,"color":"#2F6FE0","align":"left","valign":"top","lineHeight":1.2 }
+```
+and, on the slide object itself: `"computed": { "total": "sum(table.capTable.Count)" }`. Chart cross-filter works on **bar and pie only** — never line/scatter. Binding tokens (`{{filter.x}}`) only resolve inside a `text` element's `html`, never in table cells or chart option strings.
+
+**A viewer-adjustable filter + input, read back into text:**
+```json
+{ "id":"f-region","type":"filter","kind":"select","key":"region","options":["华东","华南"],"default":"华东","label":"区域筛选","x":80,"y":600,"w":260,"h":64,"rotation":0,"opacity":1 },
+{ "id":"in-name","type":"input","kind":"text","key":"name","label":"姓名","placeholder":"填写你的名字","x":80,"y":680,"w":260,"h":56,"rotation":0,"opacity":1 },
+{ "id":"greet","type":"text","x":380,"y":610,"w":700,"h":80,"rotation":0,"opacity":1,
+  "html":"你好 {{input.name}}，当前查看：{{filter.region}}","fontSize":22,"fontWeight":600,"color":"#132A43","align":"left","valign":"top","lineHeight":1.3 }
+```
+
+**A reusable parameterized card, instantiated twice** — one layout, two instances with different data (the closest thing this format has to a Vue component: layout = template, `paramValues` = props):
+```json
+// doc.layouts: one KPI-card layout, id "kpi-layout", declaring its slots
+{ "id":"kpi-layout","background":"#FBFCFE","transition":"none","notes":"",
+  "params":["region","value","delta"],
+  "elements":[
+    { "id":"kpi-region","type":"text","x":96,"y":96,"w":400,"h":48,"rotation":0,"opacity":1,
+      "html":"{{params.region}}","fontSize":22,"fontWeight":700,"color":"#5A6B85","align":"left","valign":"top","lineHeight":1.2 },
+    { "id":"kpi-value","type":"text","x":96,"y":160,"w":600,"h":120,"rotation":0,"opacity":1,
+      "html":"{{params.value}}","fontSize":72,"fontWeight":800,"color":"#123C73","align":"left","valign":"top","lineHeight":1 },
+    { "id":"kpi-delta","type":"text","x":96,"y":300,"w":400,"h":48,"rotation":0,"opacity":1,
+      "html":"同比 {{params.delta}}","fontSize":18,"fontWeight":600,"color":"#2F6FE0","align":"left","valign":"top","lineHeight":1.2 } ] }
+// two instances in doc.slides — SAME element ids (so they'd morph if adjacent), different paramValues
+{ "id":"s-kpi-east", "background":"#FBFCFE","transition":"none","notes":"",
+  "paramValues":{"region":"华东","value":"¥128万","delta":"+18%"},
+  "elements":[ /* same elements as the layout, ids kpi-region/kpi-value/kpi-delta */ ] }
+{ "id":"s-kpi-south","background":"#FBFCFE","transition":"none","notes":"",
+  "paramValues":{"region":"华南","value":"¥96万","delta":"+7%"},
+  "elements":[ /* same three element ids again */ ] }
+```
+`params` lives on the **whole slide**, not per element — one shared `paramValues` bag per instance. For independently parameterized repeats (e.g. three stat cards on one slide, each with its own numbers), give each its own layout/slide rather than trying to param one slide three ways.
+
 **A state slide reached by clicking a node** — parent slide has the clickable element, the state lives adjacent:
 ```json
 // on the parent slide, an element the viewer clicks:
@@ -147,6 +200,8 @@ each kind of content to the feature built for it:
 - [ ] Do consecutive slides on one subject share element **ids + `transition:"morph"`**?
 - [ ] At least one **motion moment** (ken-burns / loop / count-up), especially the cover?
 - [ ] A drill-down that would work better as a **state slide**?
+- [ ] A comparison that would work better as a **filter/cross-filter** instead of five near-duplicate slides?
+- [ ] Every `filter`/`input` has a real, presentable **`default`**?
 - [ ] One accent colour, at most two typefaces, **96px** side margins (right-most x ≤ 1184)?
 - [ ] **Speaker notes** written on each slide (they travel in the file and double as the talk track)?
 
@@ -220,6 +275,19 @@ without them — and elements should carry the full field set shown.
   browsers require `muted:true` for a video to autoplay. **Embed only SHORT
   clips** — a big data URI bloats the file and makes it slow to open/save;
   host large media and reference its URL instead.
+- **filter**: a viewer control. `kind: select|multiselect|slider|date-range`
+  (`date-range` is currently a plain text box, not a calendar widget), `key`
+  (the binding namespace — `{{filter.<key>}}`), `options` (static list) or
+  `optionsSource:{tableId,column}` (live list, deduped from a table column),
+  `label`, `default`. `multiselect` stores a comma-joined string, not an
+  array.
+- **input**: a viewer free-value box. `kind: text|number|date`, `key`
+  (`{{input.<key>}}`), `label`, `placeholder`, `default`.
+
+See [Interactive bindings](#interactive-bindings) below for how `filter`/
+`input`/`chart.filterKey`/`computed`/`params` fit together — read it before
+building anything BI-flavored (dashboards, drill-down comparisons,
+reusable data cards).
 
 ## The rules that make decks feel designed
 
@@ -260,6 +328,64 @@ properties `{{author}}`, `{{company}}`, `{{subject}}`, `{{event}}`. Set the
 props in an optional top-level `"meta": {author, company, subject, event,
 keywords}` object — great for title slides and footers that fill from one place.
 
+## Interactive bindings (BI-style: filters, cross-filter, computed, reusable cards)
+
+Full normative reference: [format.md § Interactive bindings](format.md#interactive-bindings).
+This section is the practical "when do I reach for this" version.
+
+**The four moving pieces:**
+
+| Piece | You add | Viewer/reader sees |
+|---|---|---|
+| `filter` element | a `<select>`/slider/box on the slide | picks a value, stored as `filter.<key>` |
+| `input` element | a text/number/date box | types a value, stored as `input.<key>` |
+| `chart.filterKey` | one field on a bar/pie chart | clicking a bar/slice sets `filter.<filterKey>` — drill-down without a separate control |
+| `slide.computed` / `doc.computed` | `{ "name": "sum(table.t1.Count)" }` | a text token `{{computed.name}}` that recalculates |
+
+Read any of them back anywhere with a **binding token** in a `text`
+element's `html`: `{{filter.region}}`, `{{input.name}}`,
+`{{params.value}}`, `{{computed.total}}`. These tokens **only work inside
+`text` elements** — not table cells, not chart tooltips, not svg markup. All
+of this is **present-mode only**; the editor canvas shows a static preview,
+not a live-wired dashboard.
+
+**When to reach for which:**
+- Viewer picks from a known set (region, product line, year) → **`filter`**
+  (`select`), optionally sourced live from a table column
+  (`optionsSource:{tableId,column}`).
+- Viewer types something free-form (their name, a budget number) → **`input`**.
+- The slide already *has* the categorical chart you want them clicking on →
+  skip the separate control, just set **`chart.filterKey`** and let the click
+  itself be the filter (bar/pie only).
+- A number on the slide should track a filter or a table, not be hand-typed
+  → **`computed`**, using the restricted expression grammar: `+ - * /`,
+  comparisons, a ternary, and exactly five aggregate functions —
+  `sum/avg/count/min/max` — over `table.<tableId>.<columnHeader>` (a table's
+  numeric column, extracted by matching its header text) or over plain
+  numbers. **`+` never concatenates strings** — it's always numeric; build
+  mixed copy like `"合计：{{computed.total}} 项"` as literal text around the
+  token, not with `+` inside the expression.
+- The same visual card (a KPI stat, a profile tile) repeats with different
+  numbers → a **params-bearing layout** (`slide.params: ["a","b"]` in
+  `doc.layouts`, each instance's `paramValues` fills them in, read back as
+  `{{params.a}}`). Params are per-**slide**, not per-element — one instance,
+  one shared value bag.
+
+**Guardrails specific to this feature:**
+- Every `filter`/`input` needs a `default` if you want the deck to look
+  correct on first open (before any click) — the default is shown by the
+  control *and* backfilled into every `{{filter.x}}`/`{{input.x}}` reader,
+  so pick a real, presentable default value, not `""`.
+- `filterKey`/`key` values are **global to the document** — reusing the same
+  key on two different filter elements makes them the same control in two
+  places (intentional for "repeat the filter on two slides"; a bug if you
+  meant two independent filters — give those different keys).
+- A regular save bakes the live filter/input state into the file
+  (`doc.interactState`) — an author who leaves a demo filter clicked will
+  ship that as the file's opening state. If you're producing a
+  clean/reusable template, clear selections back to sensible defaults (or
+  rely on "Save as Template", which drops `interactState` entirely).
+
 ## Gotchas
 
 - Escape `<` as `\u003c` anywhere in the JSON when writing the file block.
@@ -275,6 +401,12 @@ keywords}` object — great for title slides and footers that fill from one plac
 - **Media size**: embedding a large video as a data URI can push the file into
   the tens of MB and make it slow to open and save. Embed only short clips;
   otherwise host the file and put its URL in `media.src`.
+- **Bindings need present mode**: `{{filter.x}}`/cross-filter/`computed`
+  don't live-update on the editor canvas — verify them by opening the
+  presentation, not by re-reading the JSON.
+- A `computed` expression is **not** JavaScript — no string concatenation
+  with `+`, only the whitelisted `sum/avg/count/min/max` functions, and a
+  typo'd variable name silently reads as `''` rather than erroring.
 
 Working examples of everything above: the template decks at
 [bento.page](https://bento.page) — open one and read its JSON block.

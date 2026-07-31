@@ -2086,6 +2086,74 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 .bento-col-handle:hover { background: rgba(94, 118, 153, 0.35); }
 .bento-el-table.bento-editing td { cursor: text; }
 
+/* ————— filter / input (viewer-facing binding controls) —————
+   Rendered on the deck itself, which can be ANY background a deck author
+   picks — light paper, dark ink, a photo. An earlier version of this used a
+   translucent "lighten" frosted-glass treatment (white-on-white-ish overlay
+   + white text), which reads fine on dark ink but is nearly invisible on a
+   light/paper deck (translucent white on near-white background = no
+   contrast, and white chevron/text vanish). Rather than try to detect the
+   slide's luminance (no such signal exists at render time — background is
+   arbitrary CSS, not a model-level light/dark flag), the control is an
+   OPAQUE white pill with dark ink text: a real, physical-feeling card that
+   sits on top of any background, the way a form field looks in most native
+   UI (not a tinted overlay of its surroundings). Native <select>/<option>
+   popups can't be restyled across browsers; this only shapes the CLOSED
+   control, which is what's actually visible on the slide. */
+.bento-el-filter, .bento-el-input {
+  font-family: inherit;
+}
+.bento-el-filter label, .bento-el-input label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: inherit;
+  opacity: 0.72;
+}
+.bento-el-filter select,
+.bento-el-filter input,
+.bento-el-input input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  color: #1e2a3a;
+  background: #ffffff;
+  border: 1px solid rgba(30, 42, 58, 0.14);
+  border-radius: 8px;
+  padding: 8px 34px 8px 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 36, 0.08), 0 6px 16px -8px rgba(15, 23, 36, 0.22);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.bento-el-filter input, .bento-el-input input { cursor: text; padding-right: 12px; }
+.bento-el-filter input::placeholder, .bento-el-input input::placeholder { color: rgba(30, 42, 58, 0.4); }
+.bento-el-filter select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%231e2a3a' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round' opacity='0.55'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.bento-el-filter select[multiple] {
+  background-image: none;
+  padding: 6px;
+  min-height: 100%;
+}
+.bento-el-filter select[multiple] option { padding: 4px 8px; border-radius: 5px; }
+.bento-el-filter select:hover,
+.bento-el-filter input:hover,
+.bento-el-input input:hover {
+  border-color: rgba(30, 42, 58, 0.26);
+}
+.bento-el-filter select:focus-visible,
+.bento-el-filter input:focus-visible,
+.bento-el-input input:focus-visible {
+  outline: none;
+  border-color: var(--accent, #f7a600);
+  box-shadow: 0 0 0 3px rgba(247, 166, 0, 0.28);
+}
+.bento-el-filter option { color: #1e2a3a; }
+
 /* table properties: steppers + toggle */
 .ed-stepper { display: inline-flex; align-items: center; gap: 6px; }
 .ed-stepper .ed-btn-icon { width: 24px; height: 24px; line-height: 1; font-size: 15px; padding: 0; }
