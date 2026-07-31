@@ -418,6 +418,31 @@ export class Editor {
     this.panel = new PropsPanel(this.props, this.store)
 
     if (this.store.doc.collab?.role === 'reader') this.enterReaderMode()
+    if (import.meta.env.DEV) this.warnDevMode()
+  }
+
+  /**
+   * `npm run dev` serves the app via unbundled ES modules (`<script type=module
+   * src="/src/main.ts">`, `/@vite/client`) — relative paths only the dev server
+   * can resolve. `save.ts`'s self-save trick clones whatever DOM is live at
+   * boot, so a save triggered from THIS page embeds those dev-only script refs
+   * into the output file; opened later via `file://` (no dev server behind it),
+   * the browser's module loader can't fetch them and reports it as a CORS
+   * failure. The file itself isn't broken — it just isn't the self-contained
+   * artifact `npm run build:single` produces, and nothing in the UI said so.
+   * A one-time, dismissible banner (not a blocking confirm — autosave fires
+   * every 2.5s and would turn a modal into a nag) is enough to stop the next
+   * person from mistaking a dev-mode export for a real deck.
+   */
+  private warnDevMode() {
+    const banner = div('ed-dev-banner')
+    const close = document.createElement('button')
+    close.textContent = '×'
+    close.addEventListener('click', () => banner.remove())
+    const label = document.createElement('span')
+    label.textContent = t('Dev preview — files saved from here only open while this dev server is running. Build the app to save a standalone file.')
+    banner.append(label, close)
+    document.body.appendChild(banner)
   }
 
   /** Live viewer: block user edits (store.readOnly), hide editing chrome, and

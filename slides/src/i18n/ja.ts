@@ -727,4 +727,5 @@ export const ja: Catalog = {
   "Input": "入力欄",
   "Placeholder": "プレースホルダー",
   "Component parameters": "コンポーネントのパラメーター",
+  "Dev preview — files saved from here only open while this dev server is running. Build the app to save a standalone file.": "開発プレビュー — 今保存したファイルは、この dev server が動いている間しか開けません。単独で使えるファイルにするには、本番ビルドを実行してください。",
 }

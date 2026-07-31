@@ -727,4 +727,5 @@ export const it: Catalog = {
   "Input": "Campo di input",
   "Placeholder": "Segnaposto",
   "Component parameters": "Parametri del componente",
+  "Dev preview — files saved from here only open while this dev server is running. Build the app to save a standalone file.": "Anteprima di sviluppo — i file salvati ora si aprono solo mentre questo server di sviluppo è attivo. Compila l'app per salvare un file autonomo.",
 }

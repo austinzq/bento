@@ -777,6 +777,20 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   100% { box-shadow: 0 0 0 0 rgba(255,158,138,0); }
 }
 
+/* --- dev-mode preview banner (Vite dev server, never a real build) ------- */
+.ed-dev-banner {
+  position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5000;
+  background: rgba(120,40,20,0.94); color: #fff; padding: 8px 14px 8px 16px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 8px 26px rgba(0,0,0,0.32); max-width: min(560px, 84vw);
+}
+.ed-dev-banner span:first-child { line-height: 1.4; }
+.ed-dev-banner button {
+  flex: none; appearance: none; border: none; background: rgba(255,255,255,0.16); color: #fff;
+  width: 20px; height: 20px; border-radius: 50%; font-size: 14px; line-height: 1; cursor: pointer;
+}
+.ed-dev-banner button:hover { background: rgba(255,255,255,0.28); }
+
 /* --- auto-save: recovery banner, saved tag, version history --------------- */
 .ed-recover {
   position: fixed;

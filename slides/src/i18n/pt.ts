@@ -722,4 +722,5 @@ export const pt: Catalog = {
   "Input": "Entrada",
   "Placeholder": "Espaço reservado",
   "Component parameters": "Parâmetros do componente",
+  "Dev preview — files saved from here only open while this dev server is running. Build the app to save a standalone file.": "Pré-visualização de desenvolvimento — os arquivos salvos agora só abrem enquanto este servidor de desenvolvimento estiver ativo. Compile o app para salvar um arquivo independente.",
 }

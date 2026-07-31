@@ -659,3 +659,16 @@ names provisional.
 Synthetic `PointerEvent`s do NOT trigger Moveable/Selecto (Gesto listens for mouse
 events) — dispatch `MouseEvent`s, or use trusted input. After changing selection, wait a
 frame before starting a synthetic drag.
+
+## Dev-mode saves are not self-contained (v1.0.11, docs/DECISIONS.md 2026-07-31)
+
+A file saved while running `npm run dev` embeds dev-only
+`<script type="module" src="/@vite/client">` / `src="/src/main.ts">` refs
+(save.ts clones whatever DOM is live) — opening that file later via `file://`
+fails with a CORS-flavored console error. Only `npm run build`/`build:single`
+output is a real, self-contained deck; test "does this open standalone" only
+against `dist-single/Bento_Slides.bento.html`. `Editor.warnDevMode()`
+(`editor.ts`, gated on `import.meta.env.DEV`) shows a one-time dismissible
+`.ed-dev-banner` so this doesn't surprise the next person — it's intentionally
+NOT a blocking confirm (autosave saves every 2.5s) and intentionally does NOT
+change save behavior itself. Don't remove it as dead-looking dev-only code.

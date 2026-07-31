@@ -614,3 +614,49 @@ Consequence already implemented: each document gets its OWN origin
 (`bento-tray://<sha256 of path>`), because a shared origin would let one
 document read another's localStorage and IndexedDB — tolerable when every file
 is yours, a real leak between unrelated third-party apps.
+
+## 2026-07-31 — dev-mode saves are not self-contained; the editor now says so
+
+**The bug.** Saving (⌘S / the Save button / a download) while the app is
+running under `npm run dev` produces an HTML file that only works while that
+dev server keeps running. Opening the saved file later via `file://` (no dev
+server behind it) fails with a CORS-flavored console error. This is not a
+Bento format bug — it's `save.ts`'s self-save trick (clone the live document,
+swap the data block, re-serialize) doing exactly what it's supposed to:
+Vite's dev-mode `index.html` carries `<script type="module" src="/@vite/client">`
+and `<script type="module" src="/src/main.ts">` — real, unbundled, dev-server-relative
+module references — and those get cloned into the "saved" file right along
+with everything else. A real build (`npm run build` or `npm run build:single`)
+never has this problem: `build:single` inlines the whole runtime into
+compressed data blocks with zero external script `src` attributes, verified
+by opening the built shell via `file://` in a script-driven headless browser
+(no console errors, `window.bento` present, starter deck rendered).
+
+**Why this matters beyond "don't test that way".** `file://`-without-a-server
+is THE invariant Bento is built around (PLATFORM.md, format.md's "self-
+contained" rule) — a save silently producing a file that violates it, with
+zero indication to whoever hit Save, is exactly the kind of thing that erodes
+trust in "the file is the software" the first time someone (a developer
+testing locally, a contributor demoing a branch) tries to hand that file to
+someone else.
+
+**The fix, and what was rejected:**
+- ~~Block saving in dev mode~~ — rejected. Developers legitimately need to
+  exercise the real save/serialize path while iterating; disabling Save
+  entirely would make `npm run dev` worse for exactly the work it's for.
+- ~~A blocking `confirm()` before every save~~ — rejected. Autosave
+  (`autosave.ts`) writes the real file every 2.5s of activity; a modal on
+  that cadence would make the editor unusable, not just noisy.
+- **Shipped: a one-time, dismissible banner** (`Editor.warnDevMode`,
+  `.ed-dev-banner` in styles.css), shown once per page load, gated on Vite's
+  own `import.meta.env.DEV` (false in any real build — added
+  `/// <reference types="vite/client" />` to `src/types.d.ts` so it
+  type-checks). It doesn't change save behavior at all — a developer can
+  still save-test the mechanism — it just stops the resulting file's later
+  failure from being a silent surprise.
+
+Future agents: do not remove `warnDevMode`/`.ed-dev-banner` as unexplained
+dev-only clutter, and do not "fix" the CORS symptom by trying to make dev-mode
+saves work standalone (short of literally bundling the runtime on every save,
+there's no way to make `/src/main.ts` resolve without a server) — the banner
+is the whole fix, on purpose.

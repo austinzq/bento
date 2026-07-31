@@ -727,4 +727,5 @@ export const zhHant: Catalog = {
   "Input": "輸入框",
   "Placeholder": "預留文字",
   "Component parameters": "元件參數",
+  "Dev preview — files saved from here only open while this dev server is running. Build the app to save a standalone file.": "開發預覽模式——現在儲存的檔案只能在此 dev server 執行時開啟。請建置正式版本以儲存可獨立使用的檔案。",
 }

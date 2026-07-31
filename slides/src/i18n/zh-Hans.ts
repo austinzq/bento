@@ -727,4 +727,5 @@ export const zhHans: Catalog = {
   "Input": "输入框",
   "Placeholder": "占位符",
   "Component parameters": "组件参数",
+  "Dev preview — files saved from here only open while this dev server is running. Build the app to save a standalone file.": "开发预览模式——现在保存的文件只能在此 dev server 运行时打开。请构建正式版本以保存可独立使用的文件。",
 }
