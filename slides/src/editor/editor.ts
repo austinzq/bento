@@ -8,7 +8,7 @@ import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
-  instantiateLayout, isLightBg, layoutElementIds, newDocId, readableInk, syncLinkedChart, uid,
+  instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement,
 } from '../model'
 import { APP_VERSION, applyUpdate, applyUpdateInPlace, autoCheckEnabled, canUpdateInPlace, checkForUpdates, offlineEnabled, setAutoCheck, setOffline } from '../update'
@@ -17,7 +17,7 @@ import { renderSlide, renderThumbnail } from '../render'
 import { SlideCanvas } from './canvas'
 import { PropsPanel } from './panels'
 import { startPresentation } from '../present'
-import { canWriteInPlace, hasFileHandle, isEncryptionActive, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
+import { adoptFileHandle, canWriteInPlace, currentFileName, fileBase, hasFileHandle, isEncryptionActive, openedFileName, saveFile, serializeAuto, serializeFile, setEncryptionPassword, writeUpdatedFile, writeUpdatedFileAs } from '../save'
 import { addVersion, clearRecovery, clearVersions, docContentKey, getRecovery, listVersions, pruneOld, putRecovery, type Snapshot } from '../autosave'
 import { insertElements, insertSlides, parseClip, serializeElements, serializeSlides } from './clipboard'
 import { openSpeakerWindow, speakerIdleBody } from '../screens'
@@ -61,6 +61,9 @@ export class Editor {
   private sidebar!: HTMLElement
   private props!: HTMLElement
   private dirtyDot!: HTMLElement
+  private fileChip?: HTMLElement
+  /** Name of a deck opened by DROP when no writable handle came with it. */
+  private openedAs?: string
   private thumbTimer = 0
   private presenting = false
   private updatesB!: HTMLElement
@@ -225,15 +228,23 @@ export class Editor {
     title.spellcheck = false
     title.addEventListener('change', () => {
       this.store.commit(() => { this.store.doc.title = title.value || 'Untitled' })
-      document.title = `${this.store.doc.title} — ${appConfig().appName}`
+      this.syncWindowTitle()
     })
     // remote/programmatic title changes reflect live (unless being typed in)
     this.store.on('doc', () => {
       if (document.activeElement !== title && title.value !== this.store.doc.title) {
         title.value = this.store.doc.title
-        document.title = `${this.store.doc.title} — ${appConfig().appName}`
+        this.syncWindowTitle()
       }
     })
+
+    // The FILE this deck is open as — deliberately separate from the deck
+    // title above, because the two drift apart constantly (rename the deck and
+    // the file on disk keeps its old name) and only one of them answers "what
+    // does ⌘S overwrite?". Absent until the answer is knowable: a never-saved
+    // deck has no file, and saying so would be noise.
+    this.fileChip = div('ed-filechip')
+    this.fileChip.hidden = true
     this.dirtyDot = div('ed-dirty')
     // Capability-aware: on Safari/Firefox (and every iOS browser) there is no
     // File System Access API, so ⌘S CANNOT rewrite this file — it hands back a
@@ -325,13 +336,15 @@ export class Editor {
     const formatB = btn(ICONS.panelRight, t('Format'), () => this.togglePanel('right'), t('Format — show or hide the properties panel'))
     formatB.classList.add('ed-phone-only')
 
+    this.syncWindowTitle()
+
     this.phoneChrome = {
       insertD, insertMenu, moreD, moreMenu, slidesB, formatB, insert, actions, history,
       // order matters: this is the order they appear in the ⋯ menu
       demote: [redoB, commentB, pdfB, shareD, langD, helpB],
     }
 
-    bar.append(logo, this.updatesB, title, slidesB, insertD, history, insert, actions, moreD)
+    bar.append(logo, this.updatesB, title, this.fileChip, slidesB, insertD, history, insert, actions, moreD)
 
     // main area
     const main = div('ed-main')
@@ -1618,9 +1631,13 @@ export class Editor {
   }
 
   private highlightSidebar() {
+    let active: HTMLElement | undefined
     this.sidebar.querySelectorAll<HTMLElement>('.ed-thumb').forEach((n) => {
-      n.classList.toggle('active', Number(n.dataset.index) === this.store.currentIndex)
+      const isActive = Number(n.dataset.index) === this.store.currentIndex
+      n.classList.toggle('active', isActive)
+      if (isActive) active = n
     })
+    active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }
 
   private scheduleThumbs() {
@@ -1879,6 +1896,13 @@ export class Editor {
   // --- paste: external objects + cross-deck elements/slides ---------------------
 
   private wirePaste() {
+    // A dropped .bento.html OPENS as a deck (and adopts a writable handle);
+    // anything else falls through to the existing image/media drop behaviour.
+    document.addEventListener('dragover', (ev: DragEvent) => {
+      if ([...(ev.dataTransfer?.items ?? [])].some((i) => i.kind === 'file')) ev.preventDefault()
+    })
+    document.addEventListener('drop', (ev: DragEvent) => { void this.openDroppedDeck(ev) })
+
     document.addEventListener('paste', (ev: ClipboardEvent) => {
       if (this.presenting) return
       const a = document.activeElement as HTMLElement | null
@@ -2143,6 +2167,101 @@ export class Editor {
     document.body.appendChild(bar)
   }
 
+  /**
+   * Tab title = deck title, plus the FILE name once one is known.
+   *
+   * `openedFileName()` answers this from the handle, or from the URL when a
+   * `.bento.html` was opened directly — so it is right for a dropped file, a
+   * saved file, and a double-clicked one alike, and null for the hosted demo.
+   */
+  private syncWindowTitle() {
+    // Order matters. A handle is the truth. Failing that, a deck opened by drop
+    // is named by the file it came from — the URL is stale the moment a drop
+    // replaces the document, and would otherwise label this deck with the name
+    // of the file still sitting in the address bar.
+    const file = currentFileName() ?? this.openedAs ?? openedFileName()
+    const named = file && fileBase(file) !== this.store.doc.title
+    // Two segments, never three: a tab is narrow, and once a file name is
+    // shown the app name is the least informative thing competing for it.
+    document.title = named
+      ? `${this.store.doc.title} — ${file}`
+      : `${this.store.doc.title} — ${appConfig().appName}`
+    if (!this.fileChip) return
+    this.fileChip.hidden = !named
+    if (!file) return
+    this.fileChip.textContent = fileBase(file)
+    // Three states, because two would lie: with the API but no handle yet, ⌘S
+    // asks first and only then owns a file.
+    this.fileChip.title = !canWriteInPlace()
+      ? t('⌘S saves a copy — this browser can’t rewrite the file in place')
+      : hasFileHandle()
+        ? t('⌘S rewrites this file in place')
+        : t('⌘S asks where to save, then rewrites that file in place')
+  }
+
+  /**
+   * Open a `.bento.html` dropped onto the editor, adopting a WRITABLE handle
+   * where the browser offers one.
+   *
+   * This is the only route to in-place saving for a deck that arrived from
+   * disk. A file double-clicked in Finder opens on `file://` with no handle, so
+   * every ⌘S re-runs the save picker and asks the user to navigate to the file
+   * they already have open. `getAsFileSystemHandle()` returns a real handle for
+   * a dropped file (Chromium only), so one permission prompt converts that deck
+   * into one Bento can rewrite.
+   *
+   * Guards, in order: images and everything else keep their existing paste/drop
+   * behaviour; an encrypted deck is refused rather than half-opened, because the
+   * password gate lives in boot and there is nothing here to prompt with; and
+   * unsaved work is confirmed before being replaced, since this is destructive
+   * in a way dropping a picture is not.
+   */
+  private async openDroppedDeck(ev: DragEvent): Promise<boolean> {
+    const item = [...(ev.dataTransfer?.items ?? [])].find((i) => i.kind === 'file')
+    const named = ev.dataTransfer?.files?.[0]?.name ?? ''
+    if (!item || !/\.bento\.html$/i.test(named)) return false
+    ev.preventDefault()
+
+    if (this.store.dirty && !confirm(t('Open {name}? Unsaved changes in this deck will be lost.', { name: named }))) return true
+
+    // The handle is the prize; a plain File still opens, just without write-back.
+    const anyItem = item as unknown as { getAsFileSystemHandle?: () => Promise<any> }
+    let handle: any = null
+    try { handle = await anyItem.getAsFileSystemHandle?.() } catch { /* not supported — read-only open */ }
+
+    const file: File | null = handle ? await handle.getFile() : (ev.dataTransfer?.files?.[0] ?? null)
+    if (!file) return true
+
+    const html = await file.text()
+    const el = new DOMParser().parseFromString(html, 'text/html').querySelector('#bento-doc')
+    const block = el?.textContent?.trim() ?? ''
+    // A pristine, never-saved shell ships an EMPTY block — the starter deck is
+    // generated at runtime, not stored. That file is a perfectly good Bento
+    // document; it just has nothing in it yet, so say that rather than call it
+    // a foreign file.
+    if (el && !block) { alert(t('{name} has no saved document yet — open it directly to start one.', { name: named })); return true }
+    let parsed: unknown
+    try { parsed = JSON.parse(block) } catch { alert(t('{name} isn’t a Bento document.', { name: named })); return true }
+    if ((parsed as { format?: string })?.format === 'bento/enc') {
+      alert(t('{name} is password-protected. Open it directly to unlock it.', { name: named }))
+      return true
+    }
+    const next = parseDoc(JSON.stringify(parsed))
+    if (!next) { alert(t('{name} isn’t a Bento document.', { name: named })); return true }
+
+    if (handle?.requestPermission) {
+      try {
+        if (await handle.requestPermission({ mode: 'readwrite' }) === 'granted') adoptFileHandle(handle)
+      } catch { /* denied or unsupported — opens read-only, ⌘S still offers Save as */ }
+    }
+    this.openedAs = named
+    this.store.replaceDoc(next)
+    this.canvas.render()
+    this.syncWindowTitle()
+    this.flashSaved(hasFileHandle() ? t('Opened {name}', { name: named }) : t('Opened {name} — ⌘S will save a copy', { name: named }))
+    return true
+  }
+
   private noticeIfCannotWriteInPlace() {
     if (canWriteInPlace()) return
     if (localStorage.getItem(SAVE_NOTICE_KEY) === 'seen') return
@@ -2293,7 +2412,7 @@ export class Editor {
       t('Paste an image or text straight onto the canvas with ⌘V.'),
       t('Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.'),
       t('Make a chart from a table and it stays linked — edit the table, the chart updates.'),
-      t('Your work auto-saves; restore earlier versions from About → Version history.'),
+      t('Your work auto-saves; restore earlier versions from Save → Version history.'),
     ]) { const li = document.createElement('li'); li.textContent = tip; ul.appendChild(li) }
     tips.appendChild(ul); colL.appendChild(tips)
     const more = div('ed-help-more')
@@ -2334,6 +2453,8 @@ export class Editor {
       const result = await saveFile(this.store.doc, forcePicker)
       if (result === 'cancelled') return
       this.store.setDirty(false)
+      // the file name is knowable from here on — put it in the tab and the chip
+      this.syncWindowTitle()
       // staged language packs are in the bytes now — stop calling them pending
       markFileSaved()
       // record a recovery baseline + a version checkpoint at each manual save
@@ -2560,25 +2681,31 @@ export class Editor {
       } else {
         const { release } = result
         status.textContent = ''
+        // One card: version, what changed, and the ways to take it. Grouping
+        // them is the layout fix — as five loose children of the status block
+        // the notes were squeezed between the heading and a vertical stack of
+        // three buttons, in a dialog that also has to hold Document properties
+        // and the toggles. The card stretches full width and owns its scroll.
+        const card = div('ed-about-update')
+        status.appendChild(card)
         const line = div('ed-about-new')
         line.textContent = t('Version {v} is available.', { v: release.version })
-        status.appendChild(line)
-        if (release.notes) {
-          const notes = div('ed-about-notes')
-          notes.textContent = release.notes
-          status.appendChild(notes)
-        }
+        card.appendChild(line)
+        if (release.notes) card.appendChild(releaseNotes(release.notes))
+        const actions = div('ed-about-actions')
         const fail = (err: any) => { status.textContent = t('Update failed: {m}', { m: String(err?.message ?? err) }) }
         const done = () => {
           status.textContent = ''
+          const after = div('ed-about-update')
+          status.appendChild(after)
           const ok = div('ed-about-new')
           ok.textContent = t('Updated to v{v} on disk.', { v: release.version })
-          status.appendChild(ok)
+          after.appendChild(ok)
           const note = div('ed-about-notes')
           note.textContent = canUpdateInPlace()
             ? t('This window is still running v{v} — reload to finish. A v{v} backup was downloaded.', { v: APP_VERSION })
             : t("This window is still running v{v}. If you overwrote the file that's open here, reload; otherwise open the file you saved.", { v: APP_VERSION })
-          status.appendChild(note)
+          after.appendChild(note)
           const reloadB = document.createElement('button')
           reloadB.className = 'ed-btn ed-btn-primary'
           reloadB.textContent = t('Reload into new version')
@@ -2590,14 +2717,16 @@ export class Editor {
             try { sessionStorage.setItem(JUST_UPDATED_KEY, release.version) } catch { /* private mode */ }
             location.reload()
           })
-          status.appendChild(reloadB)
+          const row2 = div('ed-about-actions')
+          row2.appendChild(reloadB)
+          after.appendChild(row2)
         }
 
-        // What changed, before deciding whether to take it. The manifest carries
-        // no release notes today, so this points at the per-version release page
-        // — which publish-site.mjs now creates for every release, so the link
-        // cannot dangle. Placed BEFORE the action buttons deliberately: reading
-        // first is the point.
+        // The inline notes above are the signed manifest's summary — the first
+        // five CHANGELOG lead-ins (scripts/release.mjs). This is the rest of
+        // them: the per-version release page, which publish-site.mjs creates
+        // for every release, so the link cannot dangle. First in the action
+        // row deliberately: reading before deciding is the point.
         const notesLink = document.createElement('a')
         notesLink.className = 'ed-btn'
         notesLink.href = `https://github.com/nyblnet/bento/releases/tag/v${release.version}`
@@ -2605,7 +2734,7 @@ export class Editor {
         notesLink.rel = 'noopener'
         notesLink.textContent = t('What’s new →')
         notesLink.title = t('Read the release notes for v{v} (opens in a new tab)', { v: release.version })
-        status.appendChild(notesLink)
+        actions.appendChild(notesLink)
 
         const inPlaceB = document.createElement('button')
         inPlaceB.className = 'ed-btn ed-btn-primary'
@@ -2623,7 +2752,7 @@ export class Editor {
             else { inPlaceB.disabled = false; inPlaceB.textContent = t('Update this file…') }
           } catch (err: any) { fail(err) }
         })
-        status.appendChild(inPlaceB)
+        actions.appendChild(inPlaceB)
 
         const getB = document.createElement('button')
         getB.className = 'ed-btn'
@@ -2638,10 +2767,11 @@ export class Editor {
             getB.textContent = t('Downloaded ✓')
             const note = div('ed-about-notes')
             note.textContent = t('This window keeps running v{v} until you open the downloaded file.', { v: APP_VERSION })
-            status.appendChild(note)
+            card.appendChild(note)
           } catch (err: any) { fail(err) }
         })
-        status.appendChild(getB)
+        actions.appendChild(getB)
+        card.appendChild(actions)
       }
     })
     row.appendChild(checkB)
@@ -2788,6 +2918,31 @@ function syncNoticeText(n: import('../sync/session').SyncNotice): string {
     case 'rate-limited':
       return t('Too many changes at once — live sync is catching up.')
   }
+}
+
+/**
+ * Release notes → a real list.
+ *
+ * The manifest carries them as PLAIN TEXT, one "• " bullet per line, capped at
+ * five plus an "…and N more" tail (scripts/release.mjs). A pre-wrap block gave
+ * every wrapped bullet a flush-left second line, which at 320px was most of
+ * them — so one item read as two and the box looked like a wall. Split per line
+ * and hang the indent instead.
+ *
+ * Always textContent, never innerHTML: the manifest is signed, but a signature
+ * says who wrote a string, not that it is safe to run.
+ */
+function releaseNotes(notes: string): HTMLElement {
+  const box = div('ed-about-release')
+  for (const raw of notes.split('\n')) {
+    const text = raw.trim()
+    if (!text) continue
+    const bullet = /^[•*-]\s+/.test(text)
+    const item = div(bullet ? 'ed-about-note' : 'ed-about-more')
+    item.textContent = bullet ? text.replace(/^[•*-]\s+/, '') : text
+    box.appendChild(item)
+  }
+  return box
 }
 
 /** Deep-clone an element with a fresh id (same-slide duplicates must not share ids). */

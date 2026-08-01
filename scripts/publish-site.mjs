@@ -145,6 +145,14 @@ console.log(`\n✓ published to bento-site @ ${head} (app v${ver})`)
 // because a silent skip is the exact failure being fixed.
 const releaseShell = join(site, 'releases/slides/Bento_Slides.bento.html')
 const tag = `v${ver}`
+// The title names the APP, not just the version: this repo ships more than one
+// (bento/spaces and bento/dash are starting), and a page titled 'v1.0.12' does
+// not say which one the file below it is. v1.0.6 was titled by hand and got
+// this right; every release after it went through the automated step below and
+// came out as a bare tag, so the convention was lost until the six existing
+// releases were retitled on 2026-07-27. Hardcoding it here is what stops it
+// drifting a second time.
+const releaseTitle = `bento/slides ${tag}`
 
 const ghAvailable = (() => {
   try { capture('gh', ['auth', 'status'], { stdio: ['ignore', 'pipe', 'pipe'] }); return true }
@@ -154,7 +162,7 @@ const ghAvailable = (() => {
 if (ver === '?') {
   console.warn('⚠ could not read the published version — skipping the GitHub release step')
 } else if (!ghAvailable) {
-  die(`site is published, but gh is unavailable or unauthenticated — the GitHub release for ${tag} was NOT created.\n  Fix: gh auth login, then:  gh release create ${tag} ${releaseShell} --title ${tag} --notes-file <notes>`)
+  die(`site is published, but gh is unavailable or unauthenticated — the GitHub release for ${tag} was NOT created.\n  Fix: gh auth login, then:  gh release create ${tag} ${releaseShell} --title ${releaseTitle} --notes-file <notes>`)
 } else {
   const exists = (() => {
     try { capture('gh', ['release', 'view', tag], { stdio: ['ignore', 'pipe', 'pipe'] }); return true }
@@ -189,7 +197,7 @@ if (ver === '?') {
     const intro = "Download the single file below and open it in any modern browser — it's the document, the viewer and the editor in one. Shipped files self-update through the signed release channel.\n\n"
     const notesFile = join(tmpdir(), `bento-release-${ver}.md`)
     writeFileSync(notesFile, intro + notes)
-    run('gh', ['release', 'create', tag, releaseShell, '--title', tag, '--notes-file', notesFile])
+    run('gh', ['release', 'create', tag, releaseShell, '--title', releaseTitle, '--notes-file', notesFile])
     console.log(`✓ GitHub release ${tag} created with the signed shell attached`)
   } else {
     const assets = (() => {

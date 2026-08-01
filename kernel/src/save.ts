@@ -529,6 +529,24 @@ export async function saveFile(doc: KernelDoc, forcePicker = false): Promise<Sav
 export const currentFileName = () => fileHandle?.name ?? null
 
 /**
+ * Adopt a handle obtained outside the save picker — today, a file dropped onto
+ * the editor via `DataTransferItem.getAsFileSystemHandle()`.
+ *
+ * Why this exists: a deck double-clicked from disk opens on `file://` with NO
+ * handle, so every ⌘S re-runs the picker and the user re-navigates to a file
+ * they are already looking at. A drop yields a real handle, so adopting it
+ * turns that document into one Bento can rewrite in place.
+ *
+ * The caller MUST have obtained readwrite permission first — this only records
+ * the handle. It is deliberately not exported through `window.bento`: adopting
+ * a handle silently redirects where ⌘S writes, which is a user gesture, never
+ * something a script should do behind their back.
+ */
+export function adoptFileHandle(handle: FsFileHandle): void {
+  fileHandle = handle
+}
+
+/**
  * The name of the file this document is actually open AS, when knowable.
  *
  * Two sources, best first: a held FS Access handle, else this document's own

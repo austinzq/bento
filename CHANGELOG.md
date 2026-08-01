@@ -25,6 +25,13 @@ pre-1.0.
   input state is optionally baked into the saved file (`doc.interactState`)
   so a shared deck opens exactly as you left it; "Duplicate as new deck" and
   "Save as template" both start clean.
+- **Release notes in the About dialog get room to be read.** An available
+  update is now one card — version, what changed, and the two ways to take it —
+  and the notes are a real list inside their own scroll region rather than a
+  140px porthole in a dialog that was itself scrolling. The dialog is 440px
+  wide instead of 360 (capped to the viewport, so a 375px phone keeps its
+  gutters), which is enough that the five bullets a release carries fit whole
+  at any normal window height.
 
 ## [1.0.11] — 2026-07-27
 

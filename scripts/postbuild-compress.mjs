@@ -92,7 +92,7 @@ const SLIDES_TOOLING = `<!--
   · The base64 blocks near the end are the DEFLATE-compressed app runtime
     (open source, https://bento.page) — no user content, leave them alone.
   · In a running file, window.bento exposes { doc, serialize(), loadDoc(json),
-    comments(), updates, i18n }. In the app UI: About → Copy / Replace JSON.
+    comments(), updates, i18n }. In the app UI: Save → Copy / Replace JSON.
 
   MAKE A GREAT DECK, NOT JUST A CORRECT ONE
   Bento's whole point is motion + interactivity. A wall of text slides wastes

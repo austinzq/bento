@@ -642,7 +642,7 @@ names provisional.
   same id, file survives DOMParser→splice→outerHTML, no stray script-close —
   release.mjs runs a conformance GATE before signing every release.
 - **AI round-trip**: the DOCUMENT is the interchange unit (chat AIs can't emit
-  1MB+ files). About → "Copy document JSON" / "Replace document from JSON…"
+  1MB+ files). Save → "Copy document JSON" / "Replace from JSON…"
   (store.replaceDoc, undoable); `window.bento.loadDoc(json)` for scripts; the
   shell carries a Tooling-note comment pointing AIs at #bento-doc + the API.
   Agent harnesses edit files in place; chat AIs round-trip the JSON.

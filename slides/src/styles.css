@@ -131,6 +131,28 @@ option { background: #fff; color: #1e2a3a; }
 .ed-title:hover { border-color: var(--line); }
 .ed-title:focus { border-color: var(--blue); outline: none; background: #fff; }
 
+/* The file this deck is open AS — quieter than the deck title beside it.
+   Shows the BASE name only: every Bento file ends in ".bento.html", so the
+   extension is the one part that identifies nothing (a first attempt truncated
+   from the right and rendered "…tml", which is worse than showing nothing).
+   Never shrinks — it competed with the title input and squeezed it to "Bento S"
+   — and it leaves the bar entirely at the same width the button labels do. */
+.ed-filechip {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--sunk, rgba(127, 127, 127, .08));
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  cursor: default;
+}
+.ed-filechip[hidden] { display: none; }
+@media (max-width: 1200px) { .ed-filechip { display: none; } }
+
 /* unsaved-changes dot — badges the SAVE button's corner (amber when dirty) */
 .ed-dirty {
   position: absolute;
@@ -546,7 +568,10 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   justify-content: center;
 }
 .ed-about {
-  width: 360px;
+  /* 440 rather than 360: release notes ride inline in the manifest now, and a
+     narrower box turned every bullet into two wrapped lines. The calc() keeps
+     a real gutter on a 375px phone, where the editor boots panels-collapsed. */
+  width: min(440px, calc(100vw - 24px));
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 18px 50px rgb(15 23 36 / 0.3);
@@ -604,6 +629,7 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .ed-about-new { font-weight: 600; }
 .ed-about-notes {
+  align-self: stretch;
   color: var(--muted);
   background: var(--chrome);
   border-radius: 8px;
@@ -612,6 +638,47 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
   max-height: 140px;
   overflow: auto;
 }
+
+/* ————— "an update is available" card —————
+   This is the one moment in the dialog where the user has a decision to make,
+   so it is grouped and given room instead of being five loose children of the
+   status block. Before: the notes sat in a 140px porthole inside a dialog that
+   was itself scrolling, and the three actions stacked vertically underneath —
+   so a five-bullet changelog read as one line plus two scrollbars. */
+.ed-about-update {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid #FF9E8A;
+  border-radius: 10px;
+}
+.ed-about-release {
+  color: var(--ink-2);
+  background: var(--chrome);
+  border-radius: 8px;
+  padding: 9px 12px;
+  line-height: 1.5;
+  /* Its OWN scroll region, sized off the viewport. release.mjs caps the notes
+     at five bullets plus an "…and N more" line, which fits here whole at any
+     normal window height; anything longer scrolls HERE, not the whole dialog. */
+  max-height: min(300px, 42vh);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.ed-about-release > div + div { margin-top: 5px; }
+/* hanging indent: a wrapped bullet lines up under its own text, not the marker */
+.ed-about-note {
+  padding-inline-start: 14px;
+  text-indent: -14px;
+}
+.ed-about-note::before { content: '•\00a0'; }
+.ed-about-more { color: var(--muted); font-style: italic; }
+/* wrap instead of stacking: three actions fit in one or two rows */
+.ed-about-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ed-about-actions .ed-btn { max-width: 100%; }
 .ed-about-json {
   width: 100%;
   font: 11px/1.4 ui-monospace, Menlo, monospace;

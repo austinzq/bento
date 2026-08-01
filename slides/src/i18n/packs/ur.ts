@@ -21,7 +21,7 @@
 // and must read identically for every viewer.
 //
 // Directional arrows are MIRRORED. U+2192 → is not Bidi_Mirrored, so a key
-// that ends in → is answered with ← (U+2190) in the value; the "About →
+// that ends in → is answered with ← (U+2190) in the value; the "Save →
 // Version history" breadcrumb flips for the same reason. The keys keep their
 // → untouched — they are the English source strings.
 //
@@ -496,7 +496,7 @@ export const strings: Catalog = {
   "Paste an image or text straight onto the canvas with ⌘V.": "تصویر یا متن سیدھا کینوس پر ⌘V سے چسپاں کریں۔",
   "Copy a slide (⌘C with nothing selected) and paste it into another Bento deck.": "سلائیڈ نقل کریں (کچھ منتخب کیے بغیر ⌘C) اور کسی دوسری bento پریزنٹیشن میں چسپاں کر دیں۔",
   "Make a chart from a table and it stays linked — edit the table, the chart updates.": "جدول سے چارٹ بنائیں تو وہ جڑا رہتا ہے — جدول بدلیں، چارٹ خود بدل جائے گا۔",
-  "Your work auto-saves; restore earlier versions from About → Version history.": "آپ کا کام خودکار محفوظ ہوتا رہتا ہے؛ پہلے کے ورژن تعارف ← ورژن کی تاریخ سے بحال کریں۔",
+  "Your work auto-saves; restore earlier versions from Save → Version history.": "آپ کا کام خودکار محفوظ ہوتا رہتا ہے؛ پہلے کے ورژن “محفوظ کریں” ← ورژن کی تاریخ سے بحال کریں۔",
   "Slide copied — ⌘V in any deck to paste it": "سلائیڈ نقل ہو گئی — کسی بھی پریزنٹیشن میں ⌘V سے چسپاں کریں",
   "📺 Use a second screen for notes": "📺 نوٹس کے لیے دوسری اسکرین استعمال کریں",
   "Second screen ready — press S for speaker notes": "دوسری اسکرین تیار ہے — پیش کار کے نوٹس کے لیے S دبائیں",

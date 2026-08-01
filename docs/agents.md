@@ -50,8 +50,8 @@ Two ways to work with it:
    so the block can never contain a literal `</script>`. Leave everything else in the
    file untouched.
 2. **Chat round-trip** (any chatbot): the user copies the JSON out via
-   *About → Copy document JSON*, you return a full replacement document,
-   they paste it back via *About → Replace document from JSON…* (undoable).
+   *Save → Copy document JSON*, you return a full replacement document,
+   they paste it back via *Save → Replace from JSON…* (undoable).
    In the browser console: `window.bento.doc` (read) /
    `window.bento.loadDoc(json)` (write, undoable).
 
