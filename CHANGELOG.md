@@ -28,8 +28,9 @@ pre-1.0.
 - **Data-bound charts + filmstrip navigator**: `ChartElement.bind` patches a chart's
   series/labels/name from binding paths at render time and re-mounts the live
   chart on change (the "trend of what you picked" chart); `doc.present.filmstrip`
-  (default on) draws a thin clickable bottom bar with one segment per linear
-  slide. Filtered tables render at natural height with an optional `emptyText`
+  (default on) draws a labelled, chapter-coloured (`Slide.chapter` +
+  `present.chapters`) clickable bottom bar, one chip per linear slide, wrapping
+  to two rows. Filtered tables render at natural height with an optional `emptyText`
   placeholder. The password gate explains the plain-http (no WebCrypto) case.
 - **Autocomplete + affordance glow**: `InputElement.suggestions` renders a native
   `<datalist>`; `TableElement.rowClick` makes a (filtered) table row a pick that

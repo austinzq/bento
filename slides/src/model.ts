@@ -412,6 +412,9 @@ export interface Slide {
   hover?: { type: 'focus-group' | 'reveal'; dim?: number; default?: string }
   /** review comment threads (editor-only; see Comment) */
   comments?: Comment[]
+  /** chapter (theme) this slide belongs to — the labelled filmstrip colours
+   *  chips by chapter (`doc.present.chapters` gives each chapter its colour) */
+  chapter?: string
   /** slide-level computed properties: name → whitelisted expression string
    *  (see expr.ts). Referenced elsewhere as {{computed.<name>}}. */
   computed?: Record<string, string>
@@ -463,9 +466,12 @@ export interface BentoDoc {
     slideNumber?: boolean
     controls?: boolean
     progress?: boolean
-    /** thin bottom filmstrip navigator (one segment per linear slide, hover =
-     *  name, click = jump); default ON (v1.0.11) — set false to hide */
+    /** bottom filmstrip navigator: one labelled chip per linear slide (slide
+     *  `name`), wrapping to a second row, coloured by `chapter`; click = jump.
+     *  Default ON (v1.0.11) — set false to hide. */
     filmstrip?: boolean
+    /** chapter colours for the filmstrip, in display order */
+    chapters?: Array<{ name: string; color: string }>
   }
   /** shared assets (raw SVG markup or data URIs), referenced by key */
   assets?: Record<string, string>

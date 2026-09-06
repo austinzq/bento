@@ -393,9 +393,11 @@ primary    := NUMBER | STRING | '(' ternary ')' | IDENT | IDENT '(' args? ')'
   `name` → `series[0].name`. A computed chain keyed on the viewer's pick makes one
   chart show "the trend of whatever is selected"; present mode re-mounts the live
   chart on change. The model option is never mutated.
-- **Filmstrip** (`doc.present.filmstrip`, default on, v1.0.11): a thin bottom bar
-  in present mode, one segment per linear slide (states fold into their parent),
-  hover shows `n / N · name` (slide `name`, else its largest text), click jumps.
+- **Filmstrip** (`doc.present.filmstrip`, default on, v1.0.11): a labelled bottom
+  bar in present mode — one chip per linear slide showing the slide `name` (else
+  its largest text; keep names 2–4 characters), wrapping to a second row, coloured
+  by `Slide.chapter` via `doc.present.chapters: [{name, color}]`; states fold into
+  their parent; click jumps. The slide area shrinks to leave the bar its 52px.
 - **Arithmetic** (`+ - * /`) is **always numeric** — both sides are coerced
   with `parseFloat` (non-numeric → `0`). **There is no string concatenation
   operator.** To combine text with a value, don't reach for `+`; put the

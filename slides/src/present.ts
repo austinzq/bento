@@ -637,34 +637,33 @@ export function startPresentation(
   }
   const filmstrip = document.createElement('div')
   filmstrip.className = 'bento-filmstrip'
-  const filmLabel = document.createElement('div')
-  filmLabel.className = 'bento-filmstrip-label'
+  const chapterColor = (name?: string) => doc.present?.chapters?.find((c) => c.name === name)?.color ?? 'rgba(255,255,255,0.35)'
   const segs: HTMLElement[] = []
   linear.forEach((i, n) => {
+    const s = doc.slides[i]
     const seg = document.createElement('button')
     seg.type = 'button'
     seg.className = 'bento-filmstrip-seg'
-    const text = `${n + 1} / ${linear.length} · ${slideLabel(doc.slides[i])}`
-    seg.title = text
-    seg.setAttribute('aria-label', text)
-    seg.addEventListener('mouseenter', () => { filmLabel.textContent = text })
+    const label = slideLabel(s) || String(n + 1)
+    seg.textContent = label
+    seg.title = `${n + 1} / ${linear.length} · ${label}${s.chapter ? ' · ' + s.chapter : ''}`
+    seg.setAttribute('aria-label', seg.title)
+    seg.style.setProperty('--c', chapterColor(s.chapter))
     seg.addEventListener('click', (ev) => { ev.stopPropagation(); deck.slide(i, 0) })
     filmstrip.appendChild(seg)
     segs.push(seg)
   })
-  filmstrip.appendChild(filmLabel)
   const updateFilmstrip = () => {
     const cur = deck.getIndices().h
     const n = linear.indexOf(isState(cur) ? anchorOf(cur) : cur)
     segs.forEach((s, k) => {
       s.classList.toggle('is-current', k === n)
       s.classList.toggle('is-past', k < n)
-      s.style.background = k === n ? doc.theme.accent : ''
     })
-    if (n >= 0) filmLabel.textContent = segs[n].title
   }
   if (doc.present?.filmstrip !== false && linear.length > 1) {
     overlay.appendChild(filmstrip)
+    overlay.classList.add('has-filmstrip')
     deck.on('slidechanged', updateFilmstrip)
   }
 

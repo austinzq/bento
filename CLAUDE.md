@@ -168,8 +168,9 @@ names provisional.
   binding paths parsed into the option (`boundChartOption`, pure, render.ts;
   present.ts `mountOneChart` re-mounts the live chart when a bound key changes —
   one chart shows the trend of whatever the viewer picked). `doc.present.filmstrip`
-  (default on) is the thin bottom navigator: one segment per linear slide, hover =
-  name, click = jump. `filterBy.emptyText` = placeholder row; filtered tables
+  (default on) is the labelled bottom navigator: one chip per linear slide
+  (slide `name`, keep it 2–4 chars), coloured by `Slide.chapter` through
+  `present.chapters`, wraps to two rows, click = jump; the overlay reserves 52px. `filterBy.emptyText` = placeholder row; filtered tables
   render at natural height. The password gate says so when `crypto.subtle` is
   missing (plain http on a LAN IP) instead of "wrong password".
   `pulseAffordances` (present.ts) glows filter/input
