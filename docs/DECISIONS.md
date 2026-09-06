@@ -751,3 +751,11 @@ is the whole fix, on purpose.
   否则 rowClick 监听在首次过滤后丢失；光晕要在 binding 首次重绘之后再加。
 - **安全上下文**：`crypto.subtle` 在内网 IP 的 http 下不存在，密码门会误报"密码错误"，
   现在明确提示；演示目录用 `tailscale serve` 走 https。
+
+## 2026-09-06 — 水印三层与"谁在放"
+
+- **动态水印是引擎层**（`doc.watermark`，present.ts `watermarkLayer` + main.ts `viewerGate`）：打开问一次姓名存本机，
+  每页显示 `{holder} · {viewer} · {time}`，白字 `mix-blend-mode: difference` 深浅底都可读。不进文档内容，不影响编辑器。
+- **静态可见水印与隐形水印是生成层**：静态平铺（姓名工号）角度按接收人偏 0.4°；隐形水印用零宽字符（U+2060 包裹，
+  200B/200C 编码）埋在每页标题首字后，`wm_decode.py` 还原。拒绝的方案：改坐标 0.5px（对缩放截图不稳定）。
+- 引擎不做"禁止复制/截图"——做不到，只做可溯源。
