@@ -32,6 +32,7 @@ export function startPresentation(
   const overlay = document.createElement('div')
   overlay.className = 'bento-present-overlay'
   overlay.style.setProperty('--bento-accent', doc.theme.accent)
+  if (doc.watermark?.text) overlay.appendChild(watermarkLayer(doc))
   // Reveal ignores key events originating from form fields. If focus is still
   // on an editor input (title, notes…) when the show starts, arrows go dead.
   ;(document.activeElement as HTMLElement | null)?.blur?.()
@@ -779,6 +780,38 @@ function startMediaIn(section: HTMLElement) {
 
 function pauseMediaIn(section: HTMLElement) {
   section.querySelectorAll<HTMLMediaElement>('video, audio').forEach((m) => { m.pause() })
+}
+
+// --- dynamic watermark --------------------------------------------------------
+
+/** Resolve the watermark template against viewer name + open time. */
+export function watermarkText(doc: BentoDoc, viewer: string, now = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const time = `${date} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+  return (doc.watermark?.text ?? '')
+    .replace(/\{viewer\}/g, viewer).replace(/\{time\}/g, time).replace(/\{date\}/g, date)
+    .replace(/\{title\}/g, doc.title).replace(/\{holder\}/g, doc.meta?.subject ?? '')
+    .replace(/\s*·\s*·/g, ' ·').trim()
+}
+
+export const storedViewer = (): string => { try { return localStorage.getItem('bento-viewer') ?? '' } catch { return '' } }
+
+function watermarkLayer(doc: BentoDoc): HTMLElement {
+  const wm = doc.watermark!
+  const layer = document.createElement('div')
+  layer.className = 'bento-watermark'
+  const text = watermarkText(doc, storedViewer())
+  const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+  const size = wm.fontSize ?? 15
+  const w = Math.max(320, Math.round(text.length * size * 0.95 + 120)), h = 180
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
+    `<text x="0" y="${h / 2}" font-size="${size}" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-weight="600" fill="#fff">${esc}</text></svg>`
+  layer.style.backgroundImage = `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`
+  layer.style.opacity = String(wm.opacity ?? 0.16)
+  layer.style.transform = `rotate(${wm.angle ?? -22}deg) scale(1.6)`
+  layer.setAttribute('aria-hidden', 'true')
+  return layer
 }
 
 // --- live charts --------------------------------------------------------------

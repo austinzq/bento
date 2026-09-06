@@ -739,4 +739,7 @@ export const pt: Catalog = {
   "The first open needs a network connection to verify the licence.": "A primeira abertura requer conexão de rede para verificar a licença.",
   "Offline mode — {days} days left before the licence must be re-checked online.": "Modo offline — {days} dias até a licença precisar ser verificada online novamente.",
   "This page was opened over plain http \u2014 the browser disables decryption here. Download the file and open it locally, or use an https link.": "Esta página foi aberta por http simples — o navegador desativa a descriptografia aqui. Baixe o arquivo e abra-o localmente, ou use um link https.",
+  "Who is viewing?": "Quem está visualizando?",
+  "Your name is shown as a watermark on every page while this file is open.": "Seu nome aparece como marca d’água em todas as páginas enquanto o arquivo está aberto.",
+  "Continue": "Continuar",
 }

@@ -777,6 +777,9 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .bento-filmstrip-seg.is-past { color: rgba(245,247,250,0.85); background: color-mix(in srgb, var(--c) 36%, transparent); }
 .bento-filmstrip-seg:hover { color: #0B1626; background: color-mix(in srgb, var(--c) 85%, #fff); }
 .bento-filmstrip-seg.is-current { color: #0B1626; background: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 10px color-mix(in srgb, var(--c) 60%, transparent); }
+.bento-watermark { position: fixed; inset: -40%; z-index: 55; pointer-events: none; background-repeat: repeat;
+  mix-blend-mode: difference; }
+.ed-viewergate { z-index: 2100; }
 .bento-present-toast {
   position: fixed;
   left: 50%;

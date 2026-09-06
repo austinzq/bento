@@ -393,6 +393,13 @@ primary    := NUMBER | STRING | '(' ternary ')' | IDENT | IDENT '(' args? ')'
   `name` → `series[0].name`. A computed chain keyed on the viewer's pick makes one
   chart show "the trend of whatever is selected"; present mode re-mounts the live
   chart on change. The model option is never mutated.
+- **Dynamic watermark** (`doc.watermark`, v1.0.11): `{ text, askViewer?, opacity?, angle?, fontSize? }` —
+  a tiled text layer over every slide in present mode (white, `mix-blend-mode:
+  difference`, so it reads on dark and light). `text` tokens: `{viewer}` (the name
+  the viewer typed at open when `askViewer`, kept in localStorage `bento-viewer`),
+  `{time}` (open time), `{date}`, `{title}`, `{holder}` (`doc.meta.subject`).
+  Per-recipient static marks stay in the slides; this layer says who is showing
+  the file right now.
 - **Filmstrip** (`doc.present.filmstrip`, default on, v1.0.11): a labelled bottom
   bar in present mode — one chip per linear slide showing the slide `name` (else
   its largest text; keep names 2–4 characters), wrapping to a second row, coloured

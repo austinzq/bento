@@ -744,4 +744,7 @@ export const ja: Catalog = {
   "The first open needs a network connection to verify the licence.": "初回の起動にはライセンス確認のためネットワーク接続が必要です。",
   "Offline mode — {days} days left before the licence must be re-checked online.": "オフラインモード — オンラインでの再確認まであと {days} 日。",
   "This page was opened over plain http \u2014 the browser disables decryption here. Download the file and open it locally, or use an https link.": "このページは平文の http で開かれているため、ブラウザは復号を無効にします。ファイルをダウンロードしてローカルで開くか、https リンクを使ってください。",
+  "Who is viewing?": "閲覧者のお名前",
+  "Your name is shown as a watermark on every page while this file is open.": "お名前はファイルを開いている間、各ページに透かしとして表示されます。",
+  "Continue": "続行",
 }

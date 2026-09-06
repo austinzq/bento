@@ -25,6 +25,9 @@ pre-1.0.
   `maxOfflineDays` (the server's value wins), and refuses after revocation /
   expiry / an over-long offline stretch. v1 files still open. A minimal Flask
   licence server ships in `server/license-server/` (not deployed yet).
+- **Dynamic watermark**: `doc.watermark` tiles `{holder} · {viewer} · {time}` over every
+  slide in present mode; `askViewer` prompts for the viewer's name once (stored per
+  browser). Blend-mode difference keeps it legible on any background.
 - **Data-bound charts + filmstrip navigator**: `ChartElement.bind` patches a chart's
   series/labels/name from binding paths at render time and re-mounts the live
   chart on change (the "trend of what you picked" chart); `doc.present.filmstrip`

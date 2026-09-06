@@ -173,6 +173,9 @@ names provisional.
   `present.chapters`, wraps to two rows, click = jump; the overlay reserves 52px. `filterBy.emptyText` = placeholder row; filtered tables
   render at natural height. The password gate says so when `crypto.subtle` is
   missing (plain http on a LAN IP) instead of "wrong password".
+  `doc.watermark {text, askViewer?}` = present-mode tiled layer (`watermarkLayer`
+  in present.ts, `viewerGate` in main.ts asks the name once → localStorage
+  `bento-viewer`); tokens `{viewer} {time} {date} {title} {holder}`.
   `pulseAffordances` (present.ts) glows filter/input
   controls (only those — links/rows/bars stay quiet, per user feedback) with a
   thin faint pulse for 3s on slide entry — the no-training affordance.

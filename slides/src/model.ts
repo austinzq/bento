@@ -461,6 +461,23 @@ export interface BentoDoc {
     /** defaults for newly inserted tables; omitted decks keep the standard look */
     table?: Partial<TableStyle>
   }
+  /**
+   * Dynamic watermark (v1.0.11): a tiled text layer over every slide in present
+   * mode. `text` tokens: `{viewer}` (the name the viewer typed at open when
+   * `askViewer`, else empty), `{time}` (open time, local, YYYY-MM-DD HH:mm),
+   * `{date}`, `{title}`, `{holder}` (doc.meta.subject fallback ''). Rendered
+   * white with mix-blend-mode difference so it reads on dark and light slides.
+   * Static per-recipient watermarks belong in the slides themselves; this
+   * layer is for "who is presenting this, right now".
+   */
+  watermark?: {
+    text: string
+    /** prompt the viewer for a name once (localStorage 'bento-viewer') */
+    askViewer?: boolean
+    opacity?: number
+    angle?: number
+    fontSize?: number
+  }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {
     slideNumber?: boolean

@@ -744,4 +744,7 @@ export const zhHans: Catalog = {
   "The first open needs a network connection to verify the licence.": "首次打开需要联网校验授权。",
   "Offline mode — {days} days left before the licence must be re-checked online.": "脱网模式 — 距离需要联网重新校验还有 {days} 天。",
   "This page was opened over plain http \u2014 the browser disables decryption here. Download the file and open it locally, or use an https link.": "此页面是通过普通 http 打开的，浏览器在这种情况下会禁用解密。请下载文件后在本地打开，或使用 https 链接。",
+  "Who is viewing?": "请问您是？",
+  "Your name is shown as a watermark on every page while this file is open.": "您的姓名会作为水印显示在每一页上。",
+  "Continue": "继续",
 }

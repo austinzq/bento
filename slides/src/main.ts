@@ -4,6 +4,7 @@
 // mutation — the captured copy is what gets re-serialized on save.
 
 import { resolveLicense } from '../../kernel/src/license.ts'
+import { storedViewer } from './present'
 import './styles.css'
 import { anim } from './anim'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
@@ -145,8 +146,34 @@ function licenceBanner(text: string) {
 
 function bootWith(doc: BentoDoc) {
   interact.hydrate(doc.docId, doc.interactState)
-  if (doc.readonly) playerMode(doc)
-  else editorMode(doc)
+  const start = () => { if (doc.readonly) playerMode(doc); else editorMode(doc) }
+  if (doc.watermark?.askViewer && !storedViewer()) viewerGate(start)
+  else start()
+}
+
+/** One-time "your name" prompt for the dynamic watermark (stored per browser). */
+function viewerGate(next: () => void) {
+  const gate = document.createElement('div')
+  gate.className = 'ed-pwgate ed-viewergate'
+  gate.innerHTML =
+    `<div class="ed-pwcard"><div class="ed-pwmark">👤</div>` +
+    `<h1>${t('Who is viewing?')}</h1>` +
+    `<p>${t('Your name is shown as a watermark on every page while this file is open.')}</p>` +
+    `<input type="text" autocomplete="name" maxlength="40">` +
+    `<button>${t('Continue')}</button><div class="ed-pwerr"></div></div>`
+  document.body.appendChild(gate)
+  document.getElementById('bento-splash')?.remove()
+  const input = gate.querySelector('input')!
+  const go = () => {
+    const name = input.value.trim()
+    if (!name) { input.focus(); return }
+    try { localStorage.setItem('bento-viewer', name) } catch { /* storage off */ }
+    gate.remove()
+    next()
+  }
+  gate.querySelector('button')!.addEventListener('click', go)
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go() })
+  input.focus()
 }
 
 /**
