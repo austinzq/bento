@@ -9,8 +9,9 @@ import 'reveal.js/dist/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import { interact } from './interact'
-import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
-import { morphKey } from './model'
+import { boundChartOption } from './render'
+import type { BentoDoc, ChartElement, GradientFill, ShapeElement, Slide, SlideElement } from './model'
+import { morphKey, stripCell } from './model'
 import { applyElementFrame, buildBindingContext, computedRefs, fieldContext, gradientLineCoords, renderElement, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
@@ -624,6 +625,49 @@ export function startPresentation(
     }
   }, { passive: true })
 
+  // ——— filmstrip navigator (v1.0.11): a thin bar along the bottom edge, one
+  // segment per LINEAR slide (states collapse into their parent), hover shows
+  // "n / N · name", click jumps. The film-scrubber affordance for an untrained
+  // viewer; replaces Reveal's proportional progress bar.
+  const linear = doc.slides.map((_, i) => i).filter((i) => !isState(i))
+  const slideLabel = (s: Slide): string => {
+    if (s.name) return s.name
+    const big = s.elements.find((e) => e.type === 'text' && e.fontSize >= 24)
+    return big && big.type === 'text' ? stripCell(big.html).trim().slice(0, 24) : ''
+  }
+  const filmstrip = document.createElement('div')
+  filmstrip.className = 'bento-filmstrip'
+  const filmLabel = document.createElement('div')
+  filmLabel.className = 'bento-filmstrip-label'
+  const segs: HTMLElement[] = []
+  linear.forEach((i, n) => {
+    const seg = document.createElement('button')
+    seg.type = 'button'
+    seg.className = 'bento-filmstrip-seg'
+    const text = `${n + 1} / ${linear.length} · ${slideLabel(doc.slides[i])}`
+    seg.title = text
+    seg.setAttribute('aria-label', text)
+    seg.addEventListener('mouseenter', () => { filmLabel.textContent = text })
+    seg.addEventListener('click', (ev) => { ev.stopPropagation(); deck.slide(i, 0) })
+    filmstrip.appendChild(seg)
+    segs.push(seg)
+  })
+  filmstrip.appendChild(filmLabel)
+  const updateFilmstrip = () => {
+    const cur = deck.getIndices().h
+    const n = linear.indexOf(isState(cur) ? anchorOf(cur) : cur)
+    segs.forEach((s, k) => {
+      s.classList.toggle('is-current', k === n)
+      s.classList.toggle('is-past', k < n)
+      s.style.background = k === n ? doc.theme.accent : ''
+    })
+    if (n >= 0) filmLabel.textContent = segs[n].title
+  }
+  if (doc.present?.filmstrip !== false && linear.length > 1) {
+    overlay.appendChild(filmstrip)
+    deck.on('slidechanged', updateFilmstrip)
+  }
+
   deck.on('slidechanged', ((event: any) => {
     const from = event.previousSlide as HTMLElement | undefined
     const to = event.currentSlide as HTMLElement
@@ -661,9 +705,11 @@ export function startPresentation(
     }
     wireHoverFocus(doc.slides[toIdx], to)
     if (from) disposeLiveCharts(doc.slides[fromIdx], from)
-    mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
+    mountLiveCharts(doc.slides[toIdx], to, doc, morphing ? doc.slides[fromIdx] : undefined)
     if (from) disposeBindingReactivity(from)
     bindingHandles.set(to, wireBindingReactivity(doc.slides[toIdx], to, doc))
+    // after the bindings' first paint — that re-render replaces the nodes
+    pulseAffordances(doc.slides[toIdx], to, reduceMotion)
     if (from) pauseMediaIn(from)
     startMediaIn(to)
     // Capture where this slide's formula symbols sit WHILE it is on screen —
@@ -691,6 +737,7 @@ export function startPresentation(
   deck.initialize().then(() => {
     deckReady = true
     if (startIndex > 0) deck.slide(startIndex, 0)
+    updateFilmstrip()
     // if the speaker view was opened before init (macOS reorder), fill it now
     updateSpeaker()
     // late layout: fonts/images that finish loading after init can change
@@ -709,8 +756,9 @@ export function startPresentation(
       // the opening slide never gets a slidechanged, so capture its symbols
       // here or the very first morph would have no from-side to travel from
       cacheSlideSymbols(doc, first, startIndex)
-      mountLiveCharts(doc.slides[startIndex], first)
+      mountLiveCharts(doc.slides[startIndex], first, doc)
       bindingHandles.set(first, wireBindingReactivity(doc.slides[startIndex], first, doc))
+      pulseAffordances(doc.slides[startIndex], first, reduceMotion)
       startMediaIn(first)
     }
   })
@@ -741,7 +789,27 @@ function pauseMediaIn(section: HTMLElement) {
 // snapshot so the section stays presentable in Reveal's viewDistance cache.
 const chartHandles = new WeakMap<HTMLElement, Array<() => void>>()
 
-function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) {
+/** Mount one live chart on `node`; returns the dispose that restores the snapshot. */
+function mountOneChart(el: ChartElement, node: HTMLElement, doc: BentoDoc, slide: Slide, fromEl?: ChartElement): () => void {
+  const live = el.bind ? { ...el, option: boundChartOption(el, buildBindingContext(doc, slide)) } : el
+  const dispose = mountChart(
+    live,
+    node,
+    fromEl ? fromEl.option : undefined,
+    el.filterKey ? (label: string) => { interact.set(`filter.${el.filterKey}`, label) } : undefined,
+  )
+  return () => {
+    dispose()
+    node.innerHTML = chartSnapshotSvg(live)
+    const csvg = node.querySelector('svg')
+    if (csvg) {
+      csvg.setAttribute('preserveAspectRatio', 'none')
+      ;(csvg as SVGElement).style.cssText = 'width:100%;height:100%;display:block'
+    }
+  }
+}
+
+function mountLiveCharts(slide: Slide, section: HTMLElement, doc: BentoDoc, fromSlide?: Slide) {
   const handles: Array<() => void> = []
   for (const el of slide?.elements ?? []) {
     if (el.type !== 'chart') continue
@@ -749,28 +817,7 @@ function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) 
     if (!node) continue
     // a matching chart on the other side of a morph: animate its data over
     const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
-    const dispose = mountChart(
-      el,
-      node,
-      fromEl && fromEl.type === 'chart' ? fromEl.option : undefined,
-      el.filterKey
-        ? (label: string) => {
-            interact.set(`filter.${el.filterKey}`, label)
-            // 钻取：交叉筛选 + 现有 link 机制共用同一次点击——el.link 已经在
-            // present.ts 别处的 [data-link] click 监听里处理跳转，这里只需要
-            // 确保 filter 状态先落地，跳转逻辑不用重复实现。
-          }
-        : undefined,
-    )
-    handles.push(() => {
-      dispose()
-      node.innerHTML = chartSnapshotSvg(el)
-      const csvg = node.querySelector('svg')
-      if (csvg) {
-        csvg.setAttribute('preserveAspectRatio', 'none')
-        ;(csvg as SVGElement).style.cssText = 'width:100%;height:100%;display:block'
-      }
-    })
+    handles.push(mountOneChart(el, node, doc, slide, fromEl && fromEl.type === 'chart' ? fromEl : undefined))
   }
   if (handles.length) chartHandles.set(section, handles)
 }
@@ -832,6 +879,16 @@ function bindingKeysIn(el: SlideElement, doc: BentoDoc, slide: Slide): string[] 
   const keys = new Set<string>()
   if (el.type === 'filter') keys.add(`filter.${el.key}`)
   if (el.type === 'input') keys.add(`input.${el.key}`)
+  // a filtered table depends on the key it filters by (filter.* / input.*)
+  if (el.type === 'table' && el.filterBy?.key) keys.add(el.filterBy.key)
+  // a data-bound chart depends on each bound path (computed → its leaves)
+  if (el.type === 'chart' && el.bind) {
+    for (const path of [el.bind.data, el.bind.labels, el.bind.name]) {
+      if (!path) continue
+      if (path.startsWith('computed.')) for (const leaf of expandComputedToLeaves(path.slice('computed.'.length), doc, slide)) keys.add(leaf)
+      else keys.add(path)
+    }
+  }
   const text = el.type === 'text' ? el.html : ''
   for (const m of text.matchAll(BINDING_TOKEN_RE)) {
     const token = m[1]
@@ -854,9 +911,25 @@ function wireBindingReactivity(slide: Slide, section: HTMLElement, doc: BentoDoc
     const rerender = () => {
       const nodeEl = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
       if (!nodeEl) return
+      // A control subscribed to its OWN key fires on every keystroke — replacing
+      // the <input> the viewer is typing into drops focus after one character
+      // (real bug, v1.0.11). While the viewer is inside the control, leave the
+      // DOM alone: the control already shows the value it just wrote. It still
+      // re-renders when something ELSE changes the key (chart click, another
+      // control) because focus is elsewhere then.
+      if ((el.type === 'filter' || el.type === 'input') && nodeEl.contains(document.activeElement)) return
       const ctx = buildBindingContext(doc, slide)
-      const fresh = renderElement(el, doc, { fields: fieldContext(doc, slide), bindingCtx: ctx })
+      // liveMedia + hidePlaceholders: a re-rendered element must keep its
+      // present-mode behaviours (rowClick listener, real media, no prompts)
+      const fresh = renderElement(el, doc, { fields: fieldContext(doc, slide), bindingCtx: ctx, hidePlaceholders: true, liveMedia: true })
       nodeEl.replaceWith(fresh)
+      // a re-rendered chart is a static snapshot again — remount it live and
+      // register the dispose with the section so leaving the slide cleans up
+      if (el.type === 'chart') {
+        const handles = chartHandles.get(section) ?? []
+        handles.push(mountOneChart(el, fresh, doc, slide))
+        chartHandles.set(section, handles)
+      }
     }
     for (const key of keys) unsubs.push(interact.subscribe(key, rerender))
     // Mounting a slide only wired FUTURE changes — drill-down (chart click
@@ -887,6 +960,32 @@ function fxNodes(slide: Slide, section: HTMLElement): Array<[SlideElement, HTMLE
 }
 
 /** Staggered entrance animations + count-ups for the incoming slide. */
+/**
+ * Affordance pulse (v1.0.11): for 3s after a slide appears, the FORM controls
+ * — filter selects/sliders and input boxes — wear a thin, faint glow, so an
+ * untrained viewer sees where to type or choose without any training text.
+ * Clickable things (links, tabs, rows, chart bars) are deliberately NOT
+ * glowed: too many highlights read as noise (user feedback 2026-09-06).
+ * Under reduced motion the glow is static for the same 3s (no pulse).
+ */
+const AFFORDANCE_MS = 3000
+function pulseAffordances(slide: Slide, section: HTMLElement, reduced: boolean) {
+  for (const el of slide?.elements ?? []) {
+    const interactive = el.type === 'filter' || el.type === 'input'
+    if (!interactive) continue
+    const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    if (!node) continue
+    // glow the control itself for filter/input (the wrapper is invisible)
+    const targets: HTMLElement[] = el.type === 'filter' || el.type === 'input'
+      ? [...node.querySelectorAll<HTMLElement>('select, input')]
+      : [node]
+    for (const t of targets) {
+      t.classList.add(reduced ? 'bento-affordance-static' : 'bento-affordance')
+      setTimeout(() => t.classList.remove('bento-affordance', 'bento-affordance-static'), AFFORDANCE_MS)
+    }
+  }
+}
+
 function runEnterFx(slide: Slide, section: HTMLElement) {
   const entering = fxNodes(slide, section)
     // reveal-set members are shown/hidden by hover, never by entrance tweens

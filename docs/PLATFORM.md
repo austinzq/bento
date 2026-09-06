@@ -74,7 +74,8 @@ checks) before any release.
   carries any payload's content as plaintext.
 - Autosave (IndexedDB) keeps a latest-recovery snapshot + a capped version
   timeline, keyed by `docId`. Read-only players skip autosave.
-- Password-protected docs use the `bento/enc` envelope (PBKDF2-SHA-256 300k →
+- Password-protected docs use the `bento/enc` envelope (v2 since v1.0.11: deflate
+  → HKDF(PBKDF2 ‖ optional licence secret) → AES-GCM; v1 = PBKDF2-SHA-256 300k →
   AES-GCM-256 over the doc JSON) *inside* the plaintext block — the splice
   contract still holds. **Encrypted docs are never snapshotted to IndexedDB in
   plaintext**, and every write-back path stays encrypted while the password is

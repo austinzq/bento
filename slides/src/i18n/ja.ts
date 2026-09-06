@@ -737,4 +737,11 @@ export const ja: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} を開きました — ⌘S はコピーを保存します",
   "⌘S asks where to save, then rewrites that file in place": "⌘S は保存先を尋ねてから、そのファイルを上書き保存します",
   "{name} has no saved document yet — open it directly to start one.": "{name} にはまだ保存された書類がありません。直接開いて作成してください。",
+  "Checking licence…": "ライセンスを確認中…",
+  "This licence has been revoked — contact the issuer.": "このライセンスは取り消されました — 発行者にお問い合わせください。",
+  "This licence has expired — contact the issuer.": "このライセンスは期限切れです — 発行者にお問い合わせください。",
+  "Offline for more than {days} days — connect to the network and open the file again.": "{days} 日以上オフラインです — ネットワークに接続して再度開いてください。",
+  "The first open needs a network connection to verify the licence.": "初回の起動にはライセンス確認のためネットワーク接続が必要です。",
+  "Offline mode — {days} days left before the licence must be re-checked online.": "オフラインモード — オンラインでの再確認まであと {days} 日。",
+  "This page was opened over plain http \u2014 the browser disables decryption here. Download the file and open it locally, or use an https link.": "このページは平文の http で開かれているため、ブラウザは復号を無効にします。ファイルをダウンロードしてローカルで開くか、https リンクを使ってください。",
 }

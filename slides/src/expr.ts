@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The Bento authors
 // 受限表达式文法：变量引用（filter./input./params./computed./table.）、
-// 四则运算、比较、三元、白名单函数 sum/avg/count/min/max。手写递归下降，
+// 四则运算、比较、三元、白名单函数 sum/avg/count/min/max/round/abs/contains。手写递归下降，
 // 绝不调用 eval/Function —— 文档字段必须是可以安全反复求值的纯数据字符串。
 
 export class ExprSyntaxError extends Error {}
@@ -14,7 +14,7 @@ export type ExprNode =
   | { kind: 'bin'; op: string; l: ExprNode; r: ExprNode }
   | { kind: 'ternary'; cond: ExprNode; then: ExprNode; else: ExprNode }
 
-const WHITELISTED_FUNCS = new Set(['sum', 'avg', 'count', 'min', 'max'])
+const WHITELISTED_FUNCS = new Set(['sum', 'avg', 'count', 'min', 'max', 'round', 'abs', 'contains'])
 
 interface Token { kind: 'num' | 'str' | 'ident' | 'op' | 'eof'; value: string }
 
@@ -124,7 +124,22 @@ function parseTokens(toks: Token[]): ExprNode {
   return node
 }
 
+/** Parse cache: computed fields are re-evaluated on every render, and a
+ *  lookup-table document can carry hundreds of KB of expression text —
+ *  re-tokenising that each render is the cost that shows, not evaluation. */
+const AST_CACHE = new Map<string, ExprNode>()
+const AST_CACHE_MAX = 2000
+
 export function parseExpr(src: string): ExprNode {
+  const hit = AST_CACHE.get(src)
+  if (hit) return hit
+  const ast = parseExprUncached(src)
+  if (AST_CACHE.size >= AST_CACHE_MAX) AST_CACHE.delete(AST_CACHE.keys().next().value as string)
+  AST_CACHE.set(src, ast)
+  return ast
+}
+
+function parseExprUncached(src: string): ExprNode {
   return parseTokens(tokenize(src))
 }
 
@@ -153,8 +168,23 @@ export function evalExpr(node: ExprNode, ctx: Record<string, unknown>): unknown 
       // column reference) — flatten arrays so sum(table.sales.amount) reduces
       // the whole column, while sum(1,2,3) is unaffected.
       const rawVals = node.args.map((a) => evalExpr(a, ctx))
+      // contains(haystack, needle): case-insensitive substring test on the RAW
+      // (string) values — the fuzzy-search primitive. An empty needle matches.
+      if (node.name === 'contains') {
+        const hay = String(rawVals[0] ?? '').toLowerCase(), needle = String(rawVals[1] ?? '').toLowerCase()
+        return hay.includes(needle)
+      }
       const vals = rawVals.flatMap((v) => (Array.isArray(v) ? v.map(num) : [num(v)]))
       switch (node.name) {
+        // Scalar helpers (v1.0.11): round(x, digits = 0) / abs(x). `round` is what
+        // makes calculator-style computed fields presentable — String(19.792000000000002)
+        // is what a viewer would otherwise see in a {{computed.x}} token.
+        case 'round': {
+          const d = Math.max(0, Math.min(10, Math.trunc(vals[1] ?? 0)))
+          const k = 10 ** d
+          return Math.round((vals[0] ?? 0) * k) / k
+        }
+        case 'abs': return Math.abs(vals[0] ?? 0)
         case 'sum': return vals.reduce((a, b) => a + b, 0)
         case 'avg': return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
         case 'count': return vals.length

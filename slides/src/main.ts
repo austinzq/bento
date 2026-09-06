@@ -3,12 +3,13 @@
 // Boot sequence. Order matters: capture the pristine document BEFORE any DOM
 // mutation — the captured copy is what gets re-serialized on save.
 
+import { resolveLicense } from '../../kernel/src/license.ts'
 import './styles.css'
 import { anim } from './anim'
 import { configureApp, appConfig } from '../../kernel/src/app.ts'
 import {
   capturePristine, readEmbeddedDoc, serializeFile, serializeAuto, downloadFile,
-  suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword,
+  suggestedFileName, parseEnvelope, decryptEnvelope, setEncryptionPassword, setEncryptionLicense,
   registerPreview,
 } from './save'
 import { buildSlidePreview } from './preview'
@@ -75,8 +76,40 @@ async function passwordGate() {
   const tryUnlock = async () => {
     const pass = input.value
     if (!pass) return
+    // WebCrypto only exists in a secure context (https, localhost, file://).
+    // Over plain http from a LAN address the decrypt would silently fail and
+    // read as "wrong password" — say what is actually wrong.
+    if (!globalThis.crypto?.subtle) {
+      err.textContent = t('This page was opened over plain http — the browser disables decryption here. Download the file and open it locally, or use an https link.')
+      return
+    }
     button.setAttribute('disabled', '')
-    const json = await decryptEnvelope(envelope!, pass)
+    err.textContent = ''
+    // Licensed v2 copy: the password alone is not enough — resolve the
+    // server secret (live, or from the offline-grace cache) first.
+    let secret: Uint8Array | null = null
+    let graceNote: string | null = null
+    const lic = envelope!.v === 2 ? envelope!.license : undefined
+    if (lic) {
+      err.textContent = t('Checking licence…')
+      const st = await resolveLicense(lic, pass)
+      const refuse: Partial<Record<typeof st.state, string>> = {
+        revoked: t('This licence has been revoked — contact the issuer.'),
+        expired: t('This licence has expired — contact the issuer.'),
+        bad_proof: t('Wrong password — try again'),
+        'expired-grace': t('Offline for more than {days} days — connect to the network and open the file again.', { days: st.maxOfflineDays ?? lic.maxOfflineDays }),
+        unreachable: t('The first open needs a network connection to verify the licence.'),
+      }
+      if (st.state !== 'active' && st.state !== 'grace') {
+        err.textContent = refuse[st.state] ?? t('Wrong password — try again')
+        button.removeAttribute('disabled')
+        if (st.state === 'bad_proof') input.select()
+        return
+      }
+      secret = st.secret ?? null
+      if (st.state === 'grace') graceNote = t('Offline mode — {days} days left before the licence must be re-checked online.', { days: st.graceLeftDays ?? 0 })
+    }
+    const json = await decryptEnvelope(envelope!, pass, secret)
     button.removeAttribute('disabled')
     if (json === null) {
       err.textContent = t('Wrong password — try again')
@@ -89,14 +122,25 @@ async function passwordGate() {
       return
     }
     setEncryptionPassword(pass) // saves + updates keep writing encrypted
+    if (lic) setEncryptionLicense(lic, secret)
     gate.remove()
     bootWith(doc)
+    if (graceNote) licenceBanner(graceNote)
   }
   button.addEventListener('click', () => void tryUnlock())
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') void tryUnlock()
   })
   input.focus()
+}
+
+/** Small dismissible notice (offline-grace countdown) shown after a licensed open. */
+function licenceBanner(text: string) {
+  const bar = document.createElement('div')
+  bar.className = 'ed-lic-banner'
+  bar.innerHTML = `<span>${text}</span><button type="button" aria-label="${t('Dismiss')}">×</button>`
+  bar.querySelector('button')!.addEventListener('click', () => bar.remove())
+  document.body.appendChild(bar)
 }
 
 function bootWith(doc: BentoDoc) {

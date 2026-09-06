@@ -727,3 +727,27 @@ dev-only clutter, and do not "fix" the CORS symptom by trying to make dev-mode
 saves work standalone (short of literally bundling the runtime on every save,
 there's no way to make `/src/main.ts` resolve without a server) — the banner
 is the whole fix, on purpose.
+
+## 2026-09-06 — 离线检索看板：信封 v2、许可钩子、无培训交互
+
+背景：把一套投研系统（宏观配置 + ETF 研究）封装成一人一份的离线 .bento.html，
+接收人无培训即可用。这轮为此落了几个格式/引擎级决定：
+
+- **bento/enc v2**：先 deflate 再 AES-GCM，密钥 HKDF(PBKDF2(密码) ‖ 服务端 secret)。
+  v1 文件继续可开。理由：查找表文档 13MB → 2.9MB；有 `license` 块时密码单独打不开。
+- **许可校验（kernel/src/license.ts + server/license-server/）先备好、不上线**：
+  联网换 secret、本地缓存最多 `maxOfflineDays`（服务端值优先）、吊销/过期/超期离线即拒绝。
+  用户拍板：接受联网校验 + 可设脱网最长天数，但先把其他体验做完再评估部署。
+  诚实边界：这是"N 天内必须联网"，不是 DRM；备份 localStorage 或改时钟能延长宽限。
+- **表达式**：`round/abs/contains` 进白名单；`parseExpr` 记忆化；三元链 >~3000 分支会
+  栈溢出，生成端按 1000 分块、逐块兜底。
+- **检索类交互不靠新引擎语法，靠组合**：`input.suggestions`（datalist）+ `table.filterBy`
+  （contains / emptyText / 自然高度）+ `table.rowClick`（点行即选）+ `chart.bind`
+  （选中即画走势）。拒绝的方案：状态页每指数一页（392 页，编辑器缩略图不可承受）。
+- **无培训提示**：只给 filter/input 控件 3 秒细淡光晕（用户明确：可点的东西不要亮，
+  5 秒太长、太粗太亮）；底部电影进度条式 filmstrip 导航默认开启；提示胶囊只留三处。
+- **焦点 bug**：控件订阅自身键会在输入时把自己重绘、丢焦点——`wireBindingReactivity`
+  在 `nodeEl.contains(document.activeElement)` 时跳过；re-render 必须带 `liveMedia:true`
+  否则 rowClick 监听在首次过滤后丢失；光晕要在 binding 首次重绘之后再加。
+- **安全上下文**：`crypto.subtle` 在内网 IP 的 http 下不存在，密码门会误报"密码错误"，
+  现在明确提示；演示目录用 `tailscale serve` 走 https。

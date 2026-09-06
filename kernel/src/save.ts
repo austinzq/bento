@@ -337,18 +337,40 @@ export function serializeFile(doc: KernelDoc): string {
 // the password with PBKDF2-SHA-256. The password is held in memory for the
 // session so ⌘S and self-update keep writing encrypted output.
 
+export interface LicenseInfo {
+  /** licence id — the key the licence server knows this copy by */
+  id: string
+  /** holder label (name / staff id) — informational, also what the watermark shows */
+  holder: string
+  /** base URL of the licence server (no trailing slash) */
+  serverUrl: string
+  /** informational; the server is the authority on expiry */
+  expires?: string
+  /** default grace when the server can't be reached; the server's answer overrides */
+  maxOfflineDays: number
+}
+
 export interface EncEnvelope {
   format: 'bento/enc'
-  v: 1
+  /** v1: PBKDF2 → AES-GCM over the raw JSON. v2 (v1.0.11): the JSON is
+   *  deflated first (13MB lookup-table decks → ~2MB), the key is
+   *  HKDF(PBKDF2(password) ‖ serverSecret) when `license` is present, so the
+   *  password alone cannot open a licensed copy — the secret comes from the
+   *  licence server (see license.ts) and is cached locally for at most
+   *  `maxOfflineDays`. v1 files still open. */
+  v: 1 | 2
   it: number
   salt: string
   iv: string
   data: string
+  z?: 'deflate'
+  license?: LicenseInfo
 }
 
 const ENC_ITERATIONS = 300_000
+const HKDF_INFO = 'bento/enc v2'
 
-const eb64 = {
+export const eb64 = {
   enc(bytes: Uint8Array): string {
     let s = ''
     for (const b of bytes) s += String.fromCharCode(b)
@@ -363,19 +385,31 @@ const eb64 = {
 }
 
 let encPassword: string | null = null
+/** v2 licensed copies: the server-issued secret and licence block, held in
+ *  memory so every save re-encrypts under the same licence. */
+let encSecret: Uint8Array | null = null
+let encLicense: LicenseInfo | null = null
 
 /** Set (or clear with null) the password used for every subsequent save. */
 export function setEncryptionPassword(p: string | null) {
   encPassword = p
+  if (p === null) { encSecret = null; encLicense = null }
+}
+
+/** Attach the licence a v2 file was opened under (null = plain password file). */
+export function setEncryptionLicense(license: LicenseInfo | null, secret: Uint8Array | null) {
+  encLicense = license
+  encSecret = secret
 }
 
 export const isEncryptionActive = () => encPassword !== null
+export const activeLicense = (): LicenseInfo | null => encLicense
 
 /** Parse a data-block body as an encryption envelope; null if it is not one. */
 export function parseEnvelope(text: string): EncEnvelope | null {
   try {
     const env = JSON.parse(text)
-    if (env && env.format === 'bento/enc' && env.v === 1 && env.data && env.salt && env.iv) {
+    if (env && env.format === 'bento/enc' && (env.v === 1 || env.v === 2) && env.data && env.salt && env.iv) {
       return env as EncEnvelope
     }
   } catch {
@@ -384,7 +418,16 @@ export function parseEnvelope(text: string): EncEnvelope | null {
   return null
 }
 
-async function deriveKey(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+async function passwordBits(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations }, material, 256)
+  return new Uint8Array(bits)
+}
+
+/** v1 key: PBKDF2 straight to AES-GCM (kept so v1 files keep opening). */
+async function deriveKeyV1(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
@@ -392,28 +435,59 @@ async function deriveKey(password: string, salt: Uint8Array, iterations: number)
     material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
 }
 
-async function encryptBody(json: string, password: string): Promise<string> {
+/** v2 key: HKDF over PBKDF2(password) ‖ serverSecret (secret absent = plain password file). */
+async function deriveKeyV2(password: string, salt: Uint8Array, iterations: number, secret?: Uint8Array | null): Promise<CryptoKey> {
+  const pb = await passwordBits(password, salt, iterations)
+  const ikm = secret ? new Uint8Array([...pb, ...secret]) : pb
+  const hk = await crypto.subtle.importKey('raw', ikm as BufferSource, 'HKDF', false, ['deriveKey'])
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: salt as BufferSource, info: new TextEncoder().encode(HKDF_INFO) },
+    hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+}
+
+/** AES-GCM key from the password only, for the licence cache in localStorage
+ *  (license.ts). Deterministic per (password, salt). */
+export async function passwordKeyFor(password: string, salt: Uint8Array): Promise<CryptoKey> {
+  const pb = await passwordBits(password, salt, ENC_ITERATIONS)
+  return crypto.subtle.importKey('raw', pb as BufferSource, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
+}
+
+async function pipeBytes(bytes: Uint8Array, stream: ReadableWritablePair<Uint8Array, Uint8Array>): Promise<Uint8Array> {
+  const out = new Blob([bytes as BlobPart]).stream().pipeThrough(stream)
+  return new Uint8Array(await new Response(out).arrayBuffer())
+}
+/** zlib-format deflate (matches Python's zlib.compress / DecompressionStream('deflate')). */
+const deflate = (b: Uint8Array) => pipeBytes(b, new CompressionStream('deflate'))
+const inflate = (b: Uint8Array) => pipeBytes(b, new DecompressionStream('deflate'))
+
+async function encryptBody(json: string, password: string, license?: LicenseInfo | null, secret?: Uint8Array | null): Promise<string> {
   const salt = new Uint8Array(16)
   const iv = new Uint8Array(12)
   crypto.getRandomValues(salt)
   crypto.getRandomValues(iv)
-  const key = await deriveKey(password, salt, ENC_ITERATIONS)
-  const ct = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource }, key, new TextEncoder().encode(json))
+  const key = await deriveKeyV2(password, salt, ENC_ITERATIONS, secret)
+  const plain = await deflate(new TextEncoder().encode(json))
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, plain as BufferSource)
   const env: EncEnvelope = {
-    format: 'bento/enc', v: 1, it: ENC_ITERATIONS,
+    format: 'bento/enc', v: 2, it: ENC_ITERATIONS, z: 'deflate',
     salt: eb64.enc(salt), iv: eb64.enc(iv), data: eb64.enc(new Uint8Array(ct)),
   }
+  if (license) env.license = license
   return JSON.stringify(env)
 }
 
-/** Decrypt an envelope with a candidate password; null on wrong password. */
-export async function decryptEnvelope(env: EncEnvelope, password: string): Promise<string | null> {
+/** Decrypt an envelope with a candidate password (and, for a licensed v2
+ *  file, the server secret); null on wrong password / wrong secret. */
+export async function decryptEnvelope(env: EncEnvelope, password: string, secret?: Uint8Array | null): Promise<string | null> {
   try {
-    const key = await deriveKey(password, eb64.dec(env.salt), env.it || ENC_ITERATIONS)
-    const pt = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: eb64.dec(env.iv) as BufferSource }, key, eb64.dec(env.data) as BufferSource)
-    return new TextDecoder().decode(pt)
+    const salt = eb64.dec(env.salt)
+    const key = env.v === 2
+      ? await deriveKeyV2(password, salt, env.it || ENC_ITERATIONS, secret)
+      : await deriveKeyV1(password, salt, env.it || ENC_ITERATIONS)
+    const pt = new Uint8Array(await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: eb64.dec(env.iv) as BufferSource }, key, eb64.dec(env.data) as BufferSource))
+    const bytes = env.z === 'deflate' ? await inflate(pt) : pt
+    return new TextDecoder().decode(bytes)
   } catch {
     return null
   }
@@ -425,7 +499,7 @@ export async function decryptEnvelope(env: EncEnvelope, password: string): Promi
  */
 export async function serializeDocInto(shell: Document, doc: KernelDoc): Promise<string> {
   const body = encPassword
-    ? await encryptBody(JSON.stringify(doc), encPassword)
+    ? await encryptBody(JSON.stringify(doc), encPassword, encLicense, encSecret)
     : JSON.stringify(doc)
   return serializeBody(shell, body, doc)
 }

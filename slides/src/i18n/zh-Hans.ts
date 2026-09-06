@@ -737,4 +737,11 @@ export const zhHans: Catalog = {
   "Opened {name} — ⌘S will save a copy": "已打开 {name} — ⌘S 将保存副本",
   "⌘S asks where to save, then rewrites that file in place": "⌘S 会先询问保存位置，然后直接覆写该文件",
   "{name} has no saved document yet — open it directly to start one.": "{name} 中还没有已保存的文稿 — 请直接打开以创建。",
+  "Checking licence…": "正在校验授权…",
+  "This licence has been revoked — contact the issuer.": "该授权已被撤销 — 请联系发行方。",
+  "This licence has expired — contact the issuer.": "该授权已过期 — 请联系发行方。",
+  "Offline for more than {days} days — connect to the network and open the file again.": "脱网已超过 {days} 天 — 请联网后重新打开文件。",
+  "The first open needs a network connection to verify the licence.": "首次打开需要联网校验授权。",
+  "Offline mode — {days} days left before the licence must be re-checked online.": "脱网模式 — 距离需要联网重新校验还有 {days} 天。",
+  "This page was opened over plain http \u2014 the browser disables decryption here. Download the file and open it locally, or use an https link.": "此页面是通过普通 http 打开的，浏览器在这种情况下会禁用解密。请下载文件后在本地打开，或使用 https 链接。",
 }

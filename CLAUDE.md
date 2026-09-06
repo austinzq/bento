@@ -120,7 +120,13 @@ names provisional.
   never misfires as a category). `Slide.computed`/`doc.computed` are
   `Record<name, exprString>`, evaluated fresh every render by `expr.ts` — a
   **hand-written recursive-descent parser, never eval/Function**, whitelist
-  of exactly five functions (`sum/avg/count/min/max`), `+`/`-`/`*`/`/` always
+  of exactly eight functions (`sum/avg/count/min/max` + scalar `round(x,d)`/`abs(x)`
+  + `contains(hay,needle)` fuzzy match,
+  v1.0.11 — `round` exists because `String(19.792000000000002)` is what a
+  calculator-style computed token shows otherwise; `parseExpr` memoises ASTs
+  because lookup-table decks re-evaluate MBs of nested ternaries per render —
+  chains deeper than ~3000 branches overflow the recursive parser, split them),
+  `+`/`-`/`*`/`/` always
   numeric (no string concat), unresolved vars → `''`, parse/eval failure →
   the literal `{{src}}` text back (fail-open, same policy as `resolveFields`).
   `table.<tableId>.<columnHeader>` resolves to a `number[]` (shares
@@ -148,7 +154,32 @@ names provisional.
   of the same file in the same browser) plus `doc.interactState` (a plain
   snapshot baked in by every regular `save()`; `saveAsTemplate()` deletes it
   so a distributed template opens with a clean state, not the author's last
-  demo click). `.bento-el-filter`/`.bento-el-input` in `styles.css` render as
+  demo click). `TableElement.filterBy {key,column?,mode?,limit?,emptyShowsNone?}`
+  makes a table show only rows matching a filter/input value (`visibleTableRows`
+  in render.ts, pure; present.ts subscribes the table to that key) — an `input`
+  + a filterBy table IS the offline search box. Controls subscribed to their own
+  key must NOT be re-rendered while focused (`nodeEl.contains(document.activeElement)`
+  guard in `wireBindingReactivity`) or typing drops focus after one keystroke.
+  `InputElement.suggestions` (list or table column) renders a native
+  `<datalist>`; `TableElement.rowClick {key,column?,clearKey?}` turns a row into
+  a pick (present-only: gated on the `liveMedia` RenderOpt, and
+  `wireBindingReactivity`'s re-render MUST pass `liveMedia:true` or the listener
+  is lost after the first filter). `ChartElement.bind {data?,labels?,name?}` =
+  binding paths parsed into the option (`boundChartOption`, pure, render.ts;
+  present.ts `mountOneChart` re-mounts the live chart when a bound key changes —
+  one chart shows the trend of whatever the viewer picked). `doc.present.filmstrip`
+  (default on) is the thin bottom navigator: one segment per linear slide, hover =
+  name, click = jump. `filterBy.emptyText` = placeholder row; filtered tables
+  render at natural height. The password gate says so when `crypto.subtle` is
+  missing (plain http on a LAN IP) instead of "wrong password".
+  `pulseAffordances` (present.ts) glows filter/input
+  controls (only those — links/rows/bars stay quiet, per user feedback) with a
+  thin faint pulse for 3s on slide entry — the no-training affordance.
+  **bento/enc v2** (kernel/save.ts): deflate → HKDF(PBKDF2(password) ‖ server
+  secret) → AES-GCM; `kernel/src/license.ts` resolves the secret (live server →
+  offline-grace cache ≤ maxOfflineDays → refuse), `server/license-server/` is
+  the Flask issuer (Python, 中文注释). v1 envelopes still open.
+  `.bento-el-filter`/`.bento-el-input` in `styles.css` render as
   an OPAQUE white pill (not the translucent frosted-glass treatment used
   elsewhere) — those controls must read on any slide background, not just a
   dark one. Full authoring reference: `docs/format.md` § Interactive

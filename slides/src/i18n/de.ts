@@ -737,4 +737,11 @@ export const de: Catalog = {
   "Opened {name} — ⌘S will save a copy": "{name} geöffnet — ⌘S speichert eine Kopie",
   "⌘S asks where to save, then rewrites that file in place": "⌘S fragt nach dem Speicherort und überschreibt diese Datei dann direkt",
   "{name} has no saved document yet — open it directly to start one.": "{name} enthält noch kein gespeichertes Dokument — öffnen Sie die Datei direkt, um eines zu beginnen.",
+  "Checking licence…": "Lizenz wird geprüft…",
+  "This licence has been revoked — contact the issuer.": "Diese Lizenz wurde widerrufen — wenden Sie sich an den Herausgeber.",
+  "This licence has expired — contact the issuer.": "Diese Lizenz ist abgelaufen — wenden Sie sich an den Herausgeber.",
+  "Offline for more than {days} days — connect to the network and open the file again.": "Mehr als {days} Tage offline — mit dem Netzwerk verbinden und die Datei erneut öffnen.",
+  "The first open needs a network connection to verify the licence.": "Das erste Öffnen benötigt eine Netzwerkverbindung zur Lizenzprüfung.",
+  "Offline mode — {days} days left before the licence must be re-checked online.": "Offline-Modus — noch {days} Tage, bis die Lizenz online neu geprüft werden muss.",
+  "This page was opened over plain http \u2014 the browser disables decryption here. Download the file and open it locally, or use an https link.": "Diese Seite wurde über einfaches http geöffnet — der Browser deaktiviert hier die Entschlüsselung. Laden Sie die Datei herunter und öffnen Sie sie lokal, oder verwenden Sie einen https-Link.",
 }

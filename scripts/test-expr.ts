@@ -15,6 +15,13 @@ console.log('whitelisted functions…')
 ok(evalExpr(parseExpr('sum(1,2,3)'), {}) === 6, 'sum works')
 ok(evalExpr(parseExpr('avg(2,4)'), {}) === 3, 'avg works')
 ok(evalExpr(parseExpr('max(1,5,2)'), {}) === 5, 'max works')
+ok(evalExpr(parseExpr('round(19.792000000000002, 2)'), {}) === 19.79, 'round(x, 2) works')
+ok(evalExpr(parseExpr('round(2.5)'), {}) === 3, 'round(x) defaults to 0 digits')
+ok(evalExpr(parseExpr('round(input.w * 29.21 / 100, 1)'), { 'input.w': '60' }) === 17.5, 'round coerces string inputs')
+ok(evalExpr(parseExpr('abs(0 - 4.5)'), {}) === 4.5, 'abs works')
+ok(evalExpr(parseExpr("contains('华泰柏瑞沪深300ETF', '沪深300')"), {}) === true, 'contains substring')
+ok(evalExpr(parseExpr("contains(input.q, 'etf')"), { 'input.q': '300ETF' }) === true, 'contains is case-insensitive')
+ok(evalExpr(parseExpr("contains('abc', 'x') ? 1 : 0"), {}) === 0, 'contains false in ternary')
 
 console.log('table.<id>.<col> column refs (number[]) inside aggregate functions…')
 {

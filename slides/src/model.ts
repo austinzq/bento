@@ -229,6 +229,16 @@ export interface ChartElement extends ElementBase {
   /** cross-filter: clicking a discrete category writes it to interact store
    *  under this key (bar/pie only — see spec §4.3 MVP scope note). */
   filterKey?: string
+  /**
+   * Data-bound chart (v1.0.11): binding paths (`computed.x` / `filter.x` /
+   * `input.x`) whose resolved STRING is parsed into the option at render time —
+   * `data` = comma-separated numbers → `series[0].data`, `labels` =
+   * comma-separated strings → `xAxis.data`, `name` → `series[0].name`. A
+   * computed ternary chain keyed on the viewer's pick turns one chart into "the
+   * trend of whatever you selected". Present mode re-renders (and re-mounts the
+   * live chart) when a bound key changes; the canvas renders against defaults.
+   */
+  bind?: { data?: string; labels?: string; name?: string }
 }
 
 /** A viewer-facing filter control — writes its current value to the
@@ -252,6 +262,11 @@ export interface InputElement extends ElementBase {
   label?: string
   placeholder?: string
   default?: string
+  /** Autocomplete (v1.0.11): a static list, or a table column, rendered as a
+   *  native <datalist> so the browser offers substring matches while typing —
+   *  the offline search box's "suggestions" half (the filterBy table is the
+   *  other half). */
+  suggestions?: string[] | { tableId: string; column: string }
 }
 
 /** One cell of a table. `html` is the same sanitized inline subset as text. */
@@ -300,6 +315,29 @@ export interface TableElement extends ElementBase {
   /** treat row 0 as a styled header row */
   header: boolean
   style: TableStyle
+  /**
+   * Present-mode row filter (v1.0.11, interactive bindings): keep only body
+   * rows whose cell text matches the interact-store value at `key`
+   * ('filter.<k>' or 'input.<k>'). `column` is a header cell's text (omitted =
+   * match against any cell in the row); `mode` 'contains' (default,
+   * case-insensitive substring) or 'equals'. An empty value shows every row
+   * unless `emptyShowsNone`. `limit` caps the rendered body rows (default 50)
+   * so a 1,600-row lookup table stays a search box, not a wall. Rows keep
+   * their ORIGINAL data-r index so in-cell editing still targets the right
+   * model row. The editor canvas renders against filter/input defaults.
+   */
+  filterBy?: { key: string; column?: string; mode?: 'contains' | 'equals'; limit?: number; emptyShowsNone?: boolean;
+    /** muted one-line placeholder shown when no body row is visible (e.g. "type to search") */
+    emptyText?: string }
+  /**
+   * Present-mode row pick (v1.0.11): clicking a body row writes that row's
+   * cell text (from `column`, a header cell's text; omitted = first cell) to
+   * the interact store under `key` ('filter.<k>' / 'input.<k>'), and clears
+   * `clearKey` if given. Together with `filterBy` this is "type → see
+   * suggestions → click one" — the autocomplete pick. Present-only (the
+   * editor's row click is in-cell editing).
+   */
+  rowClick?: { key: string; column?: string; clearKey?: string }
 }
 
 /**
@@ -425,6 +463,9 @@ export interface BentoDoc {
     slideNumber?: boolean
     controls?: boolean
     progress?: boolean
+    /** thin bottom filmstrip navigator (one segment per linear slide, hover =
+     *  name, click = jump); default ON (v1.0.11) — set false to hide */
+    filmstrip?: boolean
   }
   /** shared assets (raw SVG markup or data URIs), referenced by key */
   assets?: Record<string, string>

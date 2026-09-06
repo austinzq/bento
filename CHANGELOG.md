@@ -11,6 +11,36 @@ pre-1.0.
 
 ## [Unreleased]
 
+- **Expression engine: `round(x, digits)` and `abs(x)`** join the `sum/avg/count/min/max`
+  whitelist in `expr.ts`. A calculator-style `{{computed.x}}` used to render as
+  `19.792000000000002`; wrap it in `round(…, 2)`. Covered by `scripts/test-expr.ts`;
+  documented in `docs/format.md` § Interactive bindings. `parseExpr` now memoises
+  its AST (2000-entry cache): a lookup-table deck can carry megabytes of nested
+  ternary text that is re-evaluated every render, and re-tokenising it was the cost.
+- **bento/enc v2 + licence hook**: the encrypted `#bento-doc` envelope now deflates
+  the JSON before AES-GCM (a 13MB lookup-table deck → ~2.7MB) and derives the key
+  with HKDF(PBKDF2(password) ‖ serverSecret). When the envelope carries a
+  `license` block the password alone is not enough: `kernel/src/license.ts`
+  fetches the secret from the issuer's server, caches it locally for at most
+  `maxOfflineDays` (the server's value wins), and refuses after revocation /
+  expiry / an over-long offline stretch. v1 files still open. A minimal Flask
+  licence server ships in `server/license-server/` (not deployed yet).
+- **Data-bound charts + filmstrip navigator**: `ChartElement.bind` patches a chart's
+  series/labels/name from binding paths at render time and re-mounts the live
+  chart on change (the "trend of what you picked" chart); `doc.present.filmstrip`
+  (default on) draws a thin clickable bottom bar with one segment per linear
+  slide. Filtered tables render at natural height with an optional `emptyText`
+  placeholder. The password gate explains the plain-http (no WebCrypto) case.
+- **Autocomplete + affordance glow**: `InputElement.suggestions` renders a native
+  `<datalist>`; `TableElement.rowClick` makes a (filtered) table row a pick that
+  writes to a filter/input key; present mode glows filter/input controls with a
+  thin faint pulse for 3s on slide entry (`pulseAffordances`, static under reduced motion).
+- **Table row filter + `contains()`**: `TableElement.filterBy` shows only rows whose
+  cell text matches a filter/input value (contains/equals, per column or any,
+  `limit`, `emptyShowsNone`) — an input box plus a filtered table is an offline
+  search box. `contains(hay, needle)` joins the expression whitelist. Fix: a
+  filter/input control no longer re-renders itself while focused (typing lost
+  focus after one character).
 - **Interactive data bindings — filters, computed fields, cross-filtering, and
   reusable component parameters.** Slides can now carry `filter`/`input`
   elements whose live values interpolate into any text via `{{filter.x}}` /

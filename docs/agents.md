@@ -359,8 +359,10 @@ not a live-wired dashboard.
   itself be the filter (bar/pie only).
 - A number on the slide should track a filter or a table, not be hand-typed
   → **`computed`**, using the restricted expression grammar: `+ - * /`,
-  comparisons, a ternary, and exactly five aggregate functions —
-  `sum/avg/count/min/max` — over `table.<tableId>.<columnHeader>` (a table's
+  comparisons, a ternary, five aggregate functions —
+  `sum/avg/count/min/max` — plus `round(x, digits)` / `abs(x)` (always wrap a
+  calculator result in `round(…, 2)` before showing it) and
+  `contains(hay, needle)` (fuzzy match) over `table.<tableId>.<columnHeader>` (a table's
   numeric column, extracted by matching its header text) or over plain
   numbers. **`+` never concatenates strings** — it's always numeric; build
   mixed copy like `"合计：{{computed.total}} 项"` as literal text around the
@@ -405,8 +407,21 @@ not a live-wired dashboard.
   don't live-update on the editor canvas — verify them by opening the
   presentation, not by re-reading the JSON.
 - A `computed` expression is **not** JavaScript — no string concatenation
-  with `+`, only the whitelisted `sum/avg/count/min/max` functions, and a
+  with `+`, only the whitelisted `sum/avg/count/min/max/round/abs/contains` functions, and a
   typo'd variable name silently reads as `''` rather than erroring.
+
+- **Offline search box** = an `input` (kind `text`, key `q`) + a `table` with
+  `filterBy: { key: 'input.q', mode: 'contains', limit: 8, emptyShowsNone: true }`
+  holding the whole lookup list (hundreds or thousands of rows are fine — only
+  matches render). Typing filters live in present mode; no engine change per
+  search. Add a `computed` ternary chain keyed on the same `input.q` for a
+  detail card when the viewer types an exact code. Give the input
+  `suggestions` (the same label list) for native autocomplete, and the table
+  `rowClick: {key:'filter.pick', clearKey:'input.q'}` so a click on a match
+  selects it. For a trend chart per pick, bind a line chart:
+  `bind: {data:'computed.curve', labels:'computed.dates'}` where both are
+  chains keyed on the pick returning comma-separated strings. Chains deeper than ~3000
+  branches overflow the parser — split them into blocks that fall through.
 
 Working examples of everything above: the template decks at
 [bento.page](https://bento.page) — open one and read its JSON block.

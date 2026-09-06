@@ -737,4 +737,11 @@ export const zhHant: Catalog = {
   "Opened {name} — ⌘S will save a copy": "已開啟 {name} — ⌘S 將儲存副本",
   "⌘S asks where to save, then rewrites that file in place": "⌘S 會先詢問儲存位置，然後直接覆寫該檔案",
   "{name} has no saved document yet — open it directly to start one.": "{name} 中還沒有已儲存的文件 — 請直接開啟以建立。",
+  "Checking licence…": "正在校驗授權…",
+  "This licence has been revoked — contact the issuer.": "該授權已被撤銷 — 請聯絡發行方。",
+  "This licence has expired — contact the issuer.": "該授權已過期 — 請聯絡發行方。",
+  "Offline for more than {days} days — connect to the network and open the file again.": "離線已超過 {days} 天 — 請連網後重新開啟檔案。",
+  "The first open needs a network connection to verify the licence.": "首次開啟需要連網校驗授權。",
+  "Offline mode — {days} days left before the licence must be re-checked online.": "離線模式 — 距離需要連網重新校驗還有 {days} 天。",
+  "This page was opened over plain http \u2014 the browser disables decryption here. Download the file and open it locally, or use an https link.": "此頁面是透過普通 http 開啟的，瀏覽器在這種情況下會停用解密。請下載檔案後在本機開啟，或使用 https 連結。",
 }

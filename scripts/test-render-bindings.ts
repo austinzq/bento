@@ -60,6 +60,45 @@ console.log('自环：a 引用自己…')
   ok(ctx['computed.a'] === '#ERROR', 'self-referencing computed field resolves to #ERROR, never recurses forever')
 }
 
+console.log('table.filterBy：visibleTableRows 按 filter/input 值过滤行…')
+{
+  const { visibleTableRows } = await import('../slides/src/render.ts')
+  const cell = (html: string) => ({ html })
+  const t = {
+    id: 'lookup', type: 'table', x: 0, y: 0, w: 100, h: 100, rotation: 0, opacity: 1, header: true,
+    columns: [{ w: 1 }, { w: 1 }], style: {} as any,
+    rows: [
+      { cells: [cell('代码'), cell('名称')] },
+      { cells: [cell('510300'), cell('沪深300ETF')] },
+      { cells: [cell('588200'), cell('科创芯片ETF')] },
+      { cells: [cell('159995'), cell('芯片ETF华夏')] },
+    ],
+    filterBy: { key: 'input.q', mode: 'contains', limit: 50 },
+  } as any
+  ok(JSON.stringify(visibleTableRows(t, { 'input.q': '芯片' })) === '[0,2,3]', 'contains 匹配任意列，保留表头与原始行号')
+  ok(JSON.stringify(visibleTableRows(t, { 'input.q': '' })) === '[0,1,2,3]', '空查询显示全部')
+  ok(JSON.stringify(visibleTableRows({ ...t, filterBy: { ...t.filterBy, emptyShowsNone: true } }, { 'input.q': '' })) === '[0]', 'emptyShowsNone 只留表头')
+  ok(JSON.stringify(visibleTableRows({ ...t, filterBy: { key: 'input.q', column: '代码', mode: 'equals' } }, { 'input.q': '588200' })) === '[0,2]', 'column + equals 精确匹配指定列')
+  ok(JSON.stringify(visibleTableRows({ ...t, filterBy: { ...t.filterBy, limit: 1 } }, { 'input.q': 'etf' })) === '[0,1]', 'limit 截断')
+  ok(JSON.stringify(visibleTableRows({ ...t, filterBy: undefined }, { 'input.q': 'zzz' })) === '[0,1,2,3]', '无 filterBy → 全部行')
+  const { tableRowClickValue } = await import('../slides/src/render.ts')
+  const rc = { ...t, rowClick: { key: 'filter.etf', column: '名称', clearKey: 'input.q' } } as any
+  ok(tableRowClickValue(rc, 2) === '科创芯片ETF', 'rowClick 取指定列的文本')
+  ok(tableRowClickValue({ ...rc, rowClick: { key: 'filter.etf' } }, 2) === '588200', 'rowClick 默认取第一列')
+  ok(tableRowClickValue(rc, 0) === null, '表头行不可点')
+  ok(tableRowClickValue({ ...rc, rowClick: undefined }, 1) === null, '无 rowClick → null')
+  const { boundChartOption } = await import('../slides/src/render.ts')
+  const ch = { id: 'c', type: 'chart', x: 0, y: 0, w: 10, h: 10, rotation: 0, opacity: 1,
+    option: { xAxis: { type: 'category', data: ['a'] }, series: [{ type: 'line', name: 'n', data: [1] }] },
+    bind: { data: 'computed.curve', labels: 'computed.dates', name: 'filter.idx' } } as any
+  const o = boundChartOption(ch, { 'computed.curve': '1, 2.5,3', 'computed.dates': '2024-01,2024-02,2024-03', 'filter.idx': '沪深300' }) as any
+  ok(JSON.stringify(o.series[0].data) === '[1,2.5,3]', 'bind.data → series[0].data 数字')
+  ok(JSON.stringify(o.xAxis.data) === '["2024-01","2024-02","2024-03"]', 'bind.labels → xAxis.data')
+  ok(o.series[0].name === '沪深300', 'bind.name → series[0].name')
+  ok(JSON.stringify(ch.option.series[0].data) === '[1]', '模型 option 不被改动')
+  ok(boundChartOption(ch, undefined) === ch.option, '无 ctx → 原 option')
+}
+
 console.log('table.<tableId>.<column> 聚合：buildBindingContext 用 tableChartColumns 填充列数据…')
 {
   // 真实 TableElement 结构：header 行 + 3 行数字数据。tableChartColumns（复用

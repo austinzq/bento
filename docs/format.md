@@ -362,11 +362,40 @@ primary    := NUMBER | STRING | '(' ternary ')' | IDENT | IDENT '(' args? ')'
   context** the `{{…}}` tokens use — `filter.region`, `input.budget`,
   `params.tier`, `computed.other`, or `table.<tableId>.<columnHeader>`
   (below). An unresolved variable reads as `''` (empty string), never throws.
-- **Functions**: **whitelist of exactly five**: `sum`, `avg`, `count`, `min`,
-  `max`. Any other call name is a parse error. Arguments that resolve to an
+- **Functions**: **whitelist of exactly eight**: `sum`, `avg`, `count`, `min`,
+  `max`, the scalar helpers `round(x, digits = 0)` and `abs(x)`, and
+  `contains(haystack, needle)` — a case-insensitive substring test on the raw
+  string values (empty needle matches), the fuzzy-search primitive (v1.0.11 —
+  `round` is what keeps a calculator-style `{{computed.x}}` from rendering as
+  `19.792000000000002`). Any other call name is a parse error. Arguments that resolve to an
   array (a `table.*.*` column reference) are flattened before aggregating, so
   `sum(table.sales.amount)` sums the whole column while `sum(1,2,3)` sums the
   literal three arguments — both are valid uses of the same function.
+- **Table row filter** (`TableElement.filterBy`, v1.0.11): `{ key, column?, mode?, limit?, emptyShowsNone?, emptyText? }`.
+  In present mode the table shows only body rows whose cell text matches the
+  interact-store value at `key` (`filter.<k>` / `input.<k>`): `column` names a
+  header cell (omitted = any cell in the row), `mode` is `contains` (default,
+  case-insensitive substring) or `equals`, `limit` caps rendered rows (default
+  50), and an empty value shows all rows unless `emptyShowsNone`. Rows keep
+  their original `data-r` index. `emptyText` is a muted placeholder row while
+  nothing matches; a filtered table renders at natural row height (a lone
+  header never stretches). Pair an `input` box with a `filterBy:
+  {key:'input.q', emptyShowsNone:true, limit:8}` table for an offline search box.
+- **Row pick** (`TableElement.rowClick`, v1.0.11): `{ key, column?, clearKey? }` —
+  in present mode clicking a body row writes that row's cell text (`column`
+  header name, default first cell) to `key` and clears `clearKey`. With
+  `filterBy` this is type → suggestions → click one.
+- **Autocomplete** (`InputElement.suggestions`, v1.0.11): a string list or
+  `{tableId, column}`, rendered as a native `<datalist>`.
+- **Data-bound chart** (`ChartElement.bind`, v1.0.11): `{ data?, labels?, name? }`
+  are binding paths whose resolved strings are parsed into the option at render
+  time — `data` comma-separated numbers → `series[0].data`, `labels` → `xAxis.data`,
+  `name` → `series[0].name`. A computed chain keyed on the viewer's pick makes one
+  chart show "the trend of whatever is selected"; present mode re-mounts the live
+  chart on change. The model option is never mutated.
+- **Filmstrip** (`doc.present.filmstrip`, default on, v1.0.11): a thin bottom bar
+  in present mode, one segment per linear slide (states fold into their parent),
+  hover shows `n / N · name` (slide `name`, else its largest text), click jumps.
 - **Arithmetic** (`+ - * /`) is **always numeric** — both sides are coerced
   with `parseFloat` (non-numeric → `0`). **There is no string concatenation
   operator.** To combine text with a value, don't reach for `+`; put the

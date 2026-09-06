@@ -3,7 +3,7 @@
 // Shared model → DOM renderer. One code path draws slides everywhere:
 // editor canvas, sidebar thumbnails, and Reveal.js sections.
 
-import type { BentoDoc, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
+import type { BentoDoc, ChartElement, ShapeElement, Slide, SlideElement, SvgElement, TableElement } from './model'
 import { morphKey, stripCell, tableChartColumns } from './model'
 import { chartSnapshotSvg } from './charts'
 import { resolveExprString } from './expr'
@@ -572,8 +572,72 @@ const VALIGN: Record<string, string> = { top: 'flex-start', middle: 'center', bo
  * Column widths are fractional weights normalised to %. Cells carry data-r /
  * data-c so the editor can target them for in-cell editing.
  */
-export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
+/**
+ * Which body rows a table shows for the current binding context — pure so
+ * scripts/test-render-bindings.ts can cover it without a DOM. Returns row
+ * indices into el.rows (header row included when present). No filterBy →
+ * every row. Empty query → every row (or none with emptyShowsNone).
+ */
+export function visibleTableRows(el: TableElement, ctx?: Record<string, unknown>): number[] {
+  const all = el.rows.map((_, i) => i)
+  const fb = el.filterBy
+  if (!fb) return all
+  const raw = ctx?.[fb.key]
+  const query = String(raw ?? '').trim().toLowerCase()
+  const first = el.header ? 1 : 0
+  const head = el.header ? [0] : []
+  if (!query) return fb.emptyShowsNone ? head : all
+  let col = -1
+  if (fb.column && el.header) col = el.rows[0].cells.findIndex((c) => stripCell(c.html).trim() === fb.column)
+  const limit = fb.limit ?? 50
+  const hit = (html: string) => {
+    const t = stripCell(html).trim().toLowerCase()
+    return fb.mode === 'equals' ? t === query : t.includes(query)
+  }
+  const body: number[] = []
+  for (let r = first; r < el.rows.length && body.length < limit; r++) {
+    const cells = el.rows[r].cells
+    const ok = col >= 0 ? hit(cells[col]?.html ?? '') : cells.some((c) => hit(c.html))
+    if (ok) body.push(r)
+  }
+  return [...head, ...body]
+}
+
+/** Apply a chart's `bind` paths against the binding context → a NEW option
+ *  (deep-cloned; the model is untouched). No bind / no ctx → the option as is. */
+export function boundChartOption(el: ChartElement, ctx?: Record<string, unknown>): Record<string, unknown> {
+  if (!el.bind || !ctx) return el.option
+  const opt = JSON.parse(JSON.stringify(el.option)) as Record<string, unknown>
+  const resolve = (path?: string) => (path ? resolveExprString(path, ctx) : '')
+  const series = Array.isArray(opt.series) ? (opt.series as Array<Record<string, unknown>>) : []
+  if (el.bind.data) {
+    const nums = resolve(el.bind.data).split(',').map((s) => s.trim()).filter((s) => s !== '').map(Number).filter((n) => Number.isFinite(n))
+    if (series[0]) series[0].data = nums
+  }
+  if (el.bind.labels) {
+    const labels = resolve(el.bind.labels).split(',').map((s) => s.trim()).filter((s) => s !== '')
+    const x = opt.xAxis as Record<string, unknown> | undefined
+    if (x && typeof x === 'object' && !Array.isArray(x)) x.data = labels
+  }
+  if (el.bind.name && series[0]) series[0].name = resolve(el.bind.name)
+  return opt
+}
+
+/** The value a rowClick pick writes for body row `r` (pure; test-covered). */
+export function tableRowClickValue(el: TableElement, r: number): string | null {
+  const rc = el.rowClick
+  if (!rc || r < 0 || r >= el.rows.length || (el.header && r === 0)) return null
+  let col = 0
+  if (rc.column && el.header) {
+    const i = el.rows[0].cells.findIndex((c) => stripCell(c.html).trim() === rc.column)
+    if (i >= 0) col = i
+  }
+  return stripCell(el.rows[r].cells[col]?.html ?? '').trim()
+}
+
+export function renderTableHtml(el: TableElement, doc: BentoDoc, ctx?: Record<string, unknown>): string {
   const st = el.style
+  const visible = new Set(visibleTableRows(el, ctx))
   const esc = (s: string) => s.replace(/"/g, '&quot;')
   const totalW = el.columns.reduce((s, c) => s + (c.w || 0), 0) || 1
   const cols = el.columns
@@ -581,10 +645,13 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
     .join('')
   const font = esc(st.fontFamily || doc.theme.fontFamily)
   const border = st.borderWidth ? `border:${st.borderWidth}px solid ${st.borderColor};` : ''
+  let shown = 0
   const rowsHtml = el.rows
     .map((row, r) => {
+      if (!visible.has(r)) return ''
       const isHeader = el.header && r === 0
-      const bodyIndex = el.header ? r - 1 : r
+      // stripe by DISPLAYED position, so a filtered list still zebra-stripes
+      const bodyIndex = isHeader ? -1 : shown++
       const stripe = !isHeader && st.zebra && bodyIndex % 2 === 1 ? st.zebra : ''
       const cells = row.cells
         .map((cell, c) => {
@@ -608,11 +675,19 @@ export function renderTableHtml(el: TableElement, doc: BentoDoc): string {
     })
     .join('')
   const radius = st.radius ? `border-radius:${st.radius}px;overflow:hidden;` : ''
+  // A filtered table keeps natural row height (a lone header must not stretch
+  // to fill the box) and can show a muted placeholder while it is empty.
+  const filtered = !!el.filterBy
+  const placeholder = filtered && shown === 0 && el.filterBy!.emptyText
+    ? `<tr class="bento-table-empty"><td colspan="${el.columns.length}" style="padding:${st.cellPadY * 2}px ${st.cellPadX}px;` +
+      `text-align:center;color:${st.color};opacity:0.45;font-size:${Math.max(10, st.fontSize - 1)}px;">` +
+      `${sanitizeHtml(el.filterBy!.emptyText)}</td></tr>`
+    : ''
   return (
     `<div class="bento-table-wrap" style="width:100%;height:100%;${radius}">` +
-    `<table class="bento-table" style="width:100%;height:100%;border-collapse:collapse;` +
+    `<table class="bento-table" style="width:100%;height:${filtered ? 'auto' : '100%'};border-collapse:collapse;` +
     `table-layout:fixed;font-family:${font};font-size:${st.fontSize}px;line-height:1.3;">` +
-    `<colgroup>${cols}</colgroup>${rowsHtml}</table></div>`
+    `<colgroup>${cols}</colgroup>${rowsHtml}${placeholder}</table></div>`
   )
 }
 
@@ -688,7 +763,22 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       break
     case 'table':
       node.dataset.table = '1'
-      node.innerHTML = renderTableHtml(el, doc)
+      node.innerHTML = renderTableHtml(el, doc, opts.bindingCtx)
+      // rowClick is a PRESENT gesture (liveMedia = present-only render): on the
+      // editor canvas a row click must keep meaning "edit this cell".
+      if (el.rowClick && opts.liveMedia) {
+        node.style.cursor = 'pointer'
+        node.addEventListener('click', (ev) => {
+          const tr = (ev.target as HTMLElement).closest<HTMLElement>('tr[data-r]')
+          if (!tr) return
+          const value = tableRowClickValue(el, Number(tr.dataset.r))
+          if (value === null) return
+          // a pick ends the typing: drop focus so the (cleared) input re-renders
+          ;(document.activeElement as HTMLElement | null)?.blur?.()
+          interact.set(el.rowClick!.key, value)
+          if (el.rowClick!.clearKey) interact.set(el.rowClick!.clearKey, '')
+        })
+      }
       break
     case 'image': {
       const img = document.createElement('img')
@@ -766,7 +856,7 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // instance (mountLiveCharts) for tooltips/zoom. Kept as innerHTML so
       // print and thumbnails need no chart runtime at render time.
       node.dataset.chart = '1'
-      node.innerHTML = chartSnapshotSvg(el)
+      node.innerHTML = chartSnapshotSvg(el.bind ? { ...el, option: boundChartOption(el, opts.bindingCtx) } : el)
       const csvg = node.querySelector('svg')
       if (csvg) {
         csvg.setAttribute('preserveAspectRatio', 'none')
@@ -858,8 +948,23 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       input.type = el.kind
       input.placeholder = el.placeholder ?? ''
       input.value = (opts.bindingCtx?.[`input.${el.key}`] as string) ?? el.default ?? ''
+      input.setAttribute('autocomplete', 'off')
       input.addEventListener('input', () => interact.set(`input.${el.key}`, input.value))
       wrap.appendChild(input)
+      if (el.suggestions) {
+        // native autocomplete: the browser filters the datalist by substring as
+        // the viewer types; picking an entry fires 'input' like typing does.
+        const list = document.createElement('datalist')
+        list.id = `bento-dl-${el.id}`
+        const items = Array.isArray(el.suggestions) ? el.suggestions : optionsFromTable(doc, el.suggestions)
+        for (const s of items) {
+          const o = document.createElement('option')
+          o.value = s
+          list.appendChild(o)
+        }
+        input.setAttribute('list', list.id)
+        wrap.appendChild(list)
+      }
       node.appendChild(wrap)
       break
     }
