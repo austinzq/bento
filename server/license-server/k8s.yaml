@@ -9,13 +9,21 @@ kind: Deployment
 metadata: { name: bento-license, namespace: devops }
 spec:
   replicas: 1
+  strategy: { type: Recreate }   # 单副本 + RWO 卷：先停旧的再起新的，否则新旧 pod 抢同一块卷
   selector: { matchLabels: { app: bento-license } }
   template:
     metadata: { labels: { app: bento-license } }
     spec:
+      # n3 的 Longhorn 卷格式化失败（节点缺 mkfs.ext4），避开它
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: NotIn, values: [n3] }
       containers:
         - name: app
-          image: registry.yun.local/devops/bento-license:20260906
+          image: registry.yun.local/devops/bento-license:20260907b
           ports: [{ containerPort: 8080 }]
           env:
             - { name: LICENSE_DB, value: /data/licenses.json }

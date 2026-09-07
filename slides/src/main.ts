@@ -4,6 +4,7 @@
 // mutation — the captured copy is what gets re-serialized on save.
 
 import { resolveLicense } from '../../kernel/src/license.ts'
+import { report, buildOpenEvent, browserEnv } from '../../kernel/src/analytics.ts'
 import { storedViewer } from './present'
 import './styles.css'
 import { anim } from './anim'
@@ -146,7 +147,13 @@ function licenceBanner(text: string) {
 
 function bootWith(doc: BentoDoc) {
   interact.hydrate(doc.docId, doc.interactState)
-  const start = () => { if (doc.readonly) playerMode(doc); else editorMode(doc) }
+  const start = () => {
+    // after the viewer gate so the open carries the name; never awaited
+    if (doc.analytics?.url) {
+      try { report(doc.analytics, buildOpenEvent(doc, storedViewer(), browserEnv())) } catch { /* reporting must never break boot */ }
+    }
+    if (doc.readonly) playerMode(doc); else editorMode(doc)
+  }
   if (doc.watermark?.askViewer && !storedViewer()) viewerGate(start)
   else start()
 }

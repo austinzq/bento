@@ -759,3 +759,19 @@ is the whole fix, on purpose.
 - **静态可见水印与隐形水印是生成层**：静态平铺（姓名工号）角度按接收人偏 0.4°；隐形水印用零宽字符（U+2060 包裹，
   200B/200C 编码）埋在每页标题首字后，`wm_decode.py` 还原。拒绝的方案：改坐标 0.5px（对缩放截图不稳定）。
 - 引擎不做"禁止复制/截图"——做不到，只做可溯源。
+
+## 2026-09-07 — 访问统计：只发不拦，简单请求，不靠 CORS
+
+背景：一人一份的离线看板要知道"谁打开了、看了哪几页多久"。用户问会不会 CORS。
+
+- **上报是引擎层可选字段 `doc.analytics {url,id?,pages?}`**（`kernel/src/analytics.ts`）：打开门之后发一条 `open`
+  （编号、观看者、file/https/http、UA、时区、屏幕），演示模式按页累计秒数，tab 隐藏 / pagehide / 退出时一次发 `pages`。
+- **用 text/plain 的 sendBeacon（简单请求）而不是 JSON fetch**：不触发预检、不读响应，file:// 的 `Origin: null` 也能报，
+  CORS 从设计上就不是变量；服务端仍回 `Access-Control-Allow-Origin: *` 兜底。拒绝的方案：图片像素（正文装不下每页秒数）、
+  JSON 正文（会预检，file:// 下体验不稳）。
+- **绝不阻塞打开**：不 await、不读结果、服务器不在也无感；离线打开进 localStorage 队列，下次联网打开任何一份补发；
+  观看者全局离线开关直接不发。这是"统计"，不是"许可"——拦人的事只在 license.ts。
+- **真正的限制是混合内容**：https 打开的文件只能报 https 地址，所以生成器默认 `https://lic.zcpz.cc`。接口路径叫 `/v1/open`
+  而不是 analytics/track，避开广告拦截。
+- 服务端复用许可服务器（`POST /v1/open`，管理 `GET /v1/opens[/<id>]` 汇总每页停留）；统计先于许可校验上线，因为它不拦人。
+- 用户已知：这是内部资料的阅读统计，观看者姓名来自水印门的自填。

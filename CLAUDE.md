@@ -179,6 +179,13 @@ names provisional.
   `pulseAffordances` (present.ts) glows filter/input
   controls (only those — links/rows/bars stay quiet, per user feedback) with a
   thin faint pulse for 3s on slide entry — the no-training affordance.
+  `doc.analytics {url,id?,pages?}` = open reporting (`kernel/src/analytics.ts`):
+  one `open` beacon after the viewer gate + per-slide dwell `pages` batches from
+  present.ts (`DwellTracker`, flushed on hide/pagehide/exit). text/plain
+  `sendBeacon` = simple request, so CORS never matters and file:// reports;
+  fire-and-forget, offline-queued, never gates boot. The licence server takes
+  it at `POST /v1/open`. MIXED CONTENT is the real constraint (https deck → https
+  url). Don't name the path analytics/track (ad blockers).
   **bento/enc v2** (kernel/save.ts): deflate → HKDF(PBKDF2(password) ‖ server
   secret) → AES-GCM; `kernel/src/license.ts` resolves the secret (live server →
   offline-grace cache ≤ maxOfflineDays → refuse), `server/license-server/` is

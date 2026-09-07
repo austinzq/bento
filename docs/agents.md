@@ -388,6 +388,19 @@ not a live-wired dashboard.
   clean/reusable template, clear selections back to sensible defaults (or
   rely on "Save as Template", which drops `interactState` entirely).
 
+**Hand-out decks — who opened it, what did they read** (`doc.analytics`):
+set `{ "url": "https://<issuer>", "id": "<recipient>-<deck>" }` and the deck
+posts one `open` event at boot plus per-slide dwell seconds from present mode.
+It is a text/plain `sendBeacon` (simple request — no CORS preflight, so a
+double-clicked file:// copy reports too), fire-and-forget (the deck never
+waits for or reacts to the server; offline opens queue and flush later).
+Guardrails: the url must be **https** when the deck is served over https
+(mixed content is the only thing that actually blocks it); pair it with
+`doc.watermark.askViewer` so the event carries a viewer name; tell recipients
+it is there — this is reading statistics for internal material, not covert
+tracking, and the offline switch turns it off. Set `"pages": false` to keep
+only the open event. Server reference: `server/license-server/` (`/v1/open`).
+
 ## Gotchas
 
 - Escape `<` as `\u003c` anywhere in the JSON when writing the file block.

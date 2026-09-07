@@ -400,6 +400,18 @@ primary    := NUMBER | STRING | '(' ternary ')' | IDENT | IDENT '(' args? ')'
   `{time}` (open time), `{date}`, `{title}`, `{holder}` (`doc.meta.subject`).
   Per-recipient static marks stay in the slides; this layer says who is showing
   the file right now.
+- **Open reporting** (`doc.analytics`, v1.0.11): `{ url, id?, pages? }` — a handed-out
+  deck posts one `open` event to `<url>/v1/open` at boot (after the viewer gate, so
+  it carries the viewer name) and, from present mode, `pages` batches of seconds per
+  slide (flushed when the tab hides / the show ends). Both are text/plain
+  `sendBeacon` posts — simple requests, no CORS preflight, so file:// works — and
+  are fire-and-forget: the deck never waits for or reacts to the server. Offline
+  opens queue in localStorage `bento-stats-queue` and flush on the next online
+  open of any deck in that browser; the viewer's global offline switch suppresses
+  reporting. `id` is the issuer's copy id (falls back to `docId`); `pages:false`
+  keeps only the open event. `url` must be https when the deck is served over
+  https (mixed content). Absent = no reporting. Wire shape in
+  `kernel/src/analytics.ts`; server reference in `server/license-server/`.
 - **Filmstrip** (`doc.present.filmstrip`, default on, v1.0.11): a labelled bottom
   bar in present mode — one chip per linear slide showing the slide `name` (else
   its largest text; keep names 2–4 characters), wrapping to a second row, coloured

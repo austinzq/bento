@@ -15,6 +15,7 @@ import { morphKey, stripCell } from './model'
 import { applyElementFrame, buildBindingContext, computedRefs, fieldContext, gradientLineCoords, renderElement, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
+import { DwellTracker, buildPagesEvent, report } from '../../kernel/src/analytics.ts'
 
 const MORPH_DURATION = 0.65
 const MORPH_EASE = 'power2.inOut'
@@ -492,8 +493,33 @@ export function startPresentation(
     wakeLock = null
     void held?.release?.().catch(() => {})
   }
-  const onVisibility = () => { if (document.visibilityState === 'visible') void acquireWakeLock() }
+  // Page dwell reporting (doc.analytics): count seconds per slide, flush the
+  // batch when the tab hides (sendBeacon survives a closing tab) and on exit.
+  // Hidden time is not counted — leave() on hide, enter() again on show.
+  const dwell = doc.analytics?.url && doc.analytics.pages !== false ? new DwellTracker() : null
+  const dwellEnter = (idx: number) => {
+    const s = doc.slides[idx]
+    if (dwell && s) dwell.enter(idx, s.id, s.name ?? '')
+  }
+  const dwellFlush = () => {
+    if (!dwell) return
+    const last = dwell.current
+    const pages = dwell.drain()
+    if (!pages.length) return
+    try { report(doc.analytics!, buildPagesEvent(doc, storedViewer(), pages, last)) } catch { /* never disturb the show */ }
+  }
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') {
+      void acquireWakeLock()
+      if (dwell && deckReady) dwellEnter(deck.getIndices().h)
+    } else {
+      dwellFlush()
+      dwell?.leave()
+    }
+  }
+  const onPageHide = () => { dwellFlush(); dwell?.leave() }
   document.addEventListener('visibilitychange', onVisibility)
+  if (dwell) window.addEventListener('pagehide', onPageHide)
   void acquireWakeLock()
 
   const enterFullscreen = () => {
@@ -521,6 +547,9 @@ export function startPresentation(
   const exit = () => {
     if (exited) return
     exited = true
+    dwellFlush()
+    dwell?.leave()
+    if (dwell) window.removeEventListener('pagehide', onPageHide)
     // measurements are keyed by slide INDEX, so they'd be wrong for the next
     // show if the deck was edited in between — never carry them across
     symCache.clear()
@@ -719,6 +748,7 @@ export function startPresentation(
     // symbol-morph on the way out. symbolOffsets normalises by the element's
     // own box, so measuring mid-morph is safe.
     cacheSlideSymbols(doc, to, toIdx)
+    dwellEnter(toIdx)
     updateSpeaker()
   }) as any)
 
@@ -760,6 +790,7 @@ export function startPresentation(
       bindingHandles.set(first, wireBindingReactivity(doc.slides[startIndex], first, doc))
       pulseAffordances(doc.slides[startIndex], first, reduceMotion)
       startMediaIn(first)
+      dwellEnter(startIndex)
     }
   })
 

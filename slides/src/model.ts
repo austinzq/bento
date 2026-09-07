@@ -478,6 +478,21 @@ export interface BentoDoc {
     angle?: number
     fontSize?: number
   }
+  /**
+   * Open / page-dwell reporting (v1.0.11): a handed-out deck reports to
+   * `url` (`POST <url>/v1/open`, text/plain body — a simple request, so no
+   * CORS preflight and file:// works) once per open and, from present mode,
+   * seconds per page. Fire-and-forget: never gates or delays the open;
+   * offline opens queue in localStorage and flush on the next online open.
+   * `url` must be https when the deck is served over https (mixed content).
+   * `id` is the issuer's copy id (recipient + deck); `pages:false` keeps only
+   * the open event. Absent = no reporting at all. See kernel/src/analytics.ts.
+   */
+  analytics?: {
+    url: string
+    id?: string
+    pages?: boolean
+  }
   /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
   present?: {
     slideNumber?: boolean

@@ -25,6 +25,15 @@ pre-1.0.
   `maxOfflineDays` (the server's value wins), and refuses after revocation /
   expiry / an over-long offline stretch. v1 files still open. A minimal Flask
   licence server ships in `server/license-server/` (not deployed yet).
+- **Open reporting** (`doc.analytics {url, id?, pages?}`): a handed-out deck posts one
+  `open` event (copy id, viewer name from the watermark gate, opened via file/https/http,
+  UA, timezone, screen) and, from present mode, per-page dwell seconds — as a
+  text/plain `sendBeacon` (a simple request: no CORS preflight, works from file://).
+  Fire-and-forget, never gates the open; offline opens queue in localStorage and flush on
+  the next online open; the viewer's offline switch suppresses it. `kernel/src/analytics.ts`
+  (+ `scripts/test-analytics.ts`); the licence server gained `POST /v1/open` and admin
+  `GET /v1/opens[/<id>]` summaries. Mixed content is the one real constraint: the endpoint
+  must be https when the deck is served over https.
 - **Dynamic watermark**: `doc.watermark` tiles `{holder} · {viewer} · {time}` over every
   slide in present mode; `askViewer` prompts for the viewer's name once (stored per
   browser). Blend-mode difference keeps it legible on any background.
