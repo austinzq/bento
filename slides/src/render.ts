@@ -907,7 +907,26 @@ export function renderElement(el: SlideElement, doc: BentoDoc, opts: RenderOpts 
       // below; a non-string there throws and takes the whole slide render
       // down with it.
       const current = String((opts.bindingCtx?.[`filter.${el.key}`] as string) ?? el.default ?? '')
-      if (el.kind === 'select' || el.kind === 'multiselect') {
+      if (el.kind === 'buttons') {
+        // One-click picker: the whole option set is on screen, so choosing is a
+        // single tap instead of open-menu-then-pick. Kept inside the element box;
+        // authors size the box, the buttons wrap if they run out of width.
+        const row = document.createElement('div')
+        row.className = 'bento-btnrow'
+        const opts_ = el.optionsSource ? optionsFromTable(doc, el.optionsSource) : (el.options ?? [])
+        for (const o of opts_) {
+          const b = document.createElement('button')
+          b.type = 'button'
+          b.textContent = o
+          b.dataset.value = o
+          if (current === o) b.classList.add('is-on')
+          b.addEventListener('click', () => {
+            interact.set(`filter.${el.key}`, o)
+          })
+          row.appendChild(b)
+        }
+        wrap.appendChild(row)
+      } else if (el.kind === 'select' || el.kind === 'multiselect') {
         const sel = document.createElement('select')
         sel.multiple = el.kind === 'multiselect'
         const opts_ = el.optionsSource ? optionsFromTable(doc, el.optionsSource) : (el.options ?? [])

@@ -25,6 +25,13 @@ pre-1.0.
   `maxOfflineDays` (the server's value wins), and refuses after revocation /
   expiry / an over-long offline stretch. v1 files still open. A minimal Flask
   licence server ships in `server/license-server/` (not deployed yet).
+- **Button-style filter** (`FilterElement.kind: 'buttons'`): the option set renders as a
+  row of pill buttons instead of a `<select>`, so choosing costs one click rather than
+  open-then-pick — the no-training affordance for small option sets (roughly ≤ 8; long
+  lists stay on `'select'`). Current value gets `.is-on` (accent fill). Styling in
+  `styles.css` `.bento-btnrow`; the existing `pulseAffordances` glow and
+  `wireBindingReactivity` subscription work unchanged because the element is still a
+  `filter`.
 - **Open reporting** (`doc.analytics {url, id?, pages?}`): a handed-out deck posts one
   `open` event (copy id, viewer name from the watermark gate, opened via file/https/http,
   UA, timezone, screen) and, from present mode, per-page dwell seconds — as a

@@ -2208,6 +2208,20 @@ dialog.ed-pwdialog .ed-pwerr { color: #C33; }
 }
 .bento-affordance { animation: bento-glow 1.5s ease-in-out infinite; border-radius: inherit; transition: box-shadow .4s; }
 .bento-affordance-static { box-shadow: 0 0 0 1.5px rgba(255,158,138,0.4), 0 0 8px 2px rgba(255,158,138,0.2); border-radius: inherit; }
+/* Button-style filter (FilterElement kind 'buttons'): the whole option set is
+   visible, so picking costs one click. Opaque like the other filter controls so
+   it reads on any slide background. */
+.bento-btnrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; }
+.bento-btnrow button {
+  font: inherit; font-size: 0.92em; font-weight: 600; line-height: 1;
+  padding: 0.52em 0.95em; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(30, 42, 58, 0.22); background: #fff; color: rgba(30, 42, 58, 0.78);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.bento-btnrow button:hover { border-color: var(--bento-accent, #888); color: rgba(30, 42, 58, 0.95); }
+.bento-btnrow button.is-on {
+  background: var(--bento-accent, #333); border-color: var(--bento-accent, #333); color: #fff;
+}
 .bento-el-filter, .bento-el-input {
   font-family: inherit;
 }

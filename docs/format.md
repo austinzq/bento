@@ -400,6 +400,11 @@ primary    := NUMBER | STRING | '(' ternary ')' | IDENT | IDENT '(' args? ')'
   `{time}` (open time), `{date}`, `{title}`, `{holder}` (`doc.meta.subject`).
   Per-recipient static marks stay in the slides; this layer says who is showing
   the file right now.
+- **Button-style filter** (`FilterElement.kind: 'buttons'`, v1.0.11): renders `options`
+  as a row of pill buttons; clicking one writes `filter.<key>` exactly like the select
+  does. Use when the whole option set fits on screen (roughly ≤ 8 options) — it saves the
+  viewer a click and shows every choice at once. Long lists keep `'select'`. The element
+  box sizes the row; buttons wrap. `optionsSource` works the same as for `'select'`.
 - **Open reporting** (`doc.analytics`, v1.0.11): `{ url, id?, pages? }` — a handed-out
   deck posts one `open` event to `<url>/v1/open` at boot (after the viewer gate, so
   it carries the viewer name) and, from present mode, `pages` batches of seconds per

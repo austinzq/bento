@@ -245,7 +245,10 @@ export interface ChartElement extends ElementBase {
  *  interact store under `key`, readable elsewhere as `{{filter.<key>}}`. */
 export interface FilterElement extends ElementBase {
   type: 'filter'
-  kind: 'select' | 'multiselect' | 'slider' | 'date-range'
+  /** 'buttons' (v1.0.11): options render as a row of pill buttons — one click
+   *  instead of open-then-pick. Use it when the option count is small enough
+   *  to lay out (roughly ≤ 8); fall back to 'select' for long lists. */
+  kind: 'select' | 'multiselect' | 'slider' | 'date-range' | 'buttons'
   key: string
   optionsSource?: { tableId: string; column: string }
   options?: string[]

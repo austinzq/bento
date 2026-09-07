@@ -179,6 +179,10 @@ names provisional.
   `pulseAffordances` (present.ts) glows filter/input
   controls (only those — links/rows/bars stay quiet, per user feedback) with a
   thin faint pulse for 3s on slide entry — the no-training affordance.
+  `FilterElement.kind:'buttons'` renders the options as one-click pills
+  (`.bento-btnrow`, current = `.is-on`) instead of a `<select>` — use it when the
+  option set is small enough to show at once; it is still a `filter` element, so
+  reactivity, the affordance glow and `filterBy` keep working unchanged.
   `doc.analytics {url,id?,pages?}` = open reporting (`kernel/src/analytics.ts`):
   one `open` beacon after the viewer gate + per-slide dwell `pages` batches from
   present.ts (`DwellTracker`, flushed on hide/pagehide/exit). text/plain
