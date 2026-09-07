@@ -168,7 +168,9 @@ names provisional.
   binding paths parsed into the option (`boundChartOption`, pure, render.ts;
   present.ts `mountOneChart` re-mounts the live chart when a bound key changes —
   one chart shows the trend of whatever the viewer picked). `doc.present.filmstrip`
-  (default on) is the labelled bottom navigator: one chip per linear slide
+  (default on, equal-width GRID — flex made short rows stretch; current chip's
+  text colour comes from `readableInk(chapterColor)` via `--fg`, never a fixed
+  ink, or a dark navy chapter renders dark-on-dark) is the labelled bottom navigator: one chip per linear slide
   (slide `name`, keep it 2–4 chars), coloured by `Slide.chapter` through
   `present.chapters`, wraps to two rows, click = jump; the overlay reserves 52px. `filterBy.emptyText` = placeholder row; filtered tables
   render at natural height. The password gate says so when `crypto.subtle` is

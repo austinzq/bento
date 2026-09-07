@@ -11,7 +11,7 @@ import { chartSnapshotSvg, mountChart } from './charts'
 import { interact } from './interact'
 import { boundChartOption } from './render'
 import type { BentoDoc, ChartElement, GradientFill, ShapeElement, Slide, SlideElement } from './model'
-import { morphKey, stripCell } from './model'
+import { morphKey, readableInk, stripCell } from './model'
 import { applyElementFrame, buildBindingContext, computedRefs, fieldContext, gradientLineCoords, renderElement, renderSlide } from './render'
 import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
 import { t } from './i18n'
@@ -678,11 +678,21 @@ export function startPresentation(
     seg.textContent = label
     seg.title = `${n + 1} / ${linear.length} · ${label}${s.chapter ? ' · ' + s.chapter : ''}`
     seg.setAttribute('aria-label', seg.title)
-    seg.style.setProperty('--c', chapterColor(s.chapter))
+    const col = chapterColor(s.chapter)
+    seg.style.setProperty('--c', col)
+    // Chapter colours are author-chosen and can be anything from near-black navy
+    // to bright orange; the CURRENT chip fills with that colour, so its text
+    // colour has to follow the colour's luminance or you get dark-on-dark.
+    seg.style.setProperty('--fg', readableInk(col))
     seg.addEventListener('click', (ev) => { ev.stopPropagation(); deck.slide(i, 0) })
     filmstrip.appendChild(seg)
     segs.push(seg)
   })
+  // Equal-width chips laid out as a grid: with flex the last row stretched its
+  // few chips to full width, so rows had visibly different chip sizes. Column
+  // count is chosen so every chip keeps ~64px (about four CJK characters).
+  const perRow = linear.length <= 18 ? linear.length : Math.ceil(linear.length / 2)
+  filmstrip.style.gridTemplateColumns = `repeat(${Math.max(1, perRow)}, minmax(0, 1fr))`
   const updateFilmstrip = () => {
     const cur = deck.getIndices().h
     const n = linear.indexOf(isState(cur) ? anchorOf(cur) : cur)

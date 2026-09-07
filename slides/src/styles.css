@@ -765,18 +765,21 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 }
 .bento-present-grant:hover { opacity: 1; }
 /* labelled filmstrip: one chip per linear slide, wraps to a 2nd row, coloured by chapter (--c) */
-.bento-filmstrip { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; flex-wrap: wrap; gap: 3px;
+.bento-filmstrip { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: grid; gap: 3px;
   padding: 4px 6px; box-sizing: border-box; max-height: 52px; overflow: hidden; background: rgba(8,14,24,0.92);
   border-top: 1px solid rgba(255,255,255,0.08); }
 .bento-present-overlay.has-filmstrip .reveal { height: calc(100% - 52px); }
-.bento-filmstrip-seg { flex: 1 1 auto; min-width: 0; height: 19px; border: 0; padding: 0 9px; margin: 0; border-radius: 4px;
+.bento-filmstrip-seg { min-width: 0; height: 19px; border: 0; padding: 0 9px; margin: 0; border-radius: 4px;
   font: 600 11px/19px -apple-system, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; letter-spacing: 0.2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background .15s, color .15s;
   color: rgba(245,247,250,0.72); background: color-mix(in srgb, var(--c) 22%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent); }
 .bento-filmstrip-seg.is-past { color: rgba(245,247,250,0.85); background: color-mix(in srgb, var(--c) 36%, transparent); }
-.bento-filmstrip-seg:hover { color: #0B1626; background: color-mix(in srgb, var(--c) 85%, #fff); }
-.bento-filmstrip-seg.is-current { color: #0B1626; background: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 10px color-mix(in srgb, var(--c) 60%, transparent); }
+.bento-filmstrip-seg:hover { color: #0B1626; background: color-mix(in srgb, var(--c) 82%, #fff); }
+/* --fg is set per chip from the chapter colour's luminance (present.ts): a dark
+   navy chapter gets light text, a bright accent gets dark text. */
+.bento-filmstrip-seg.is-current { color: var(--fg, #F5F7FA); background: var(--c); font-weight: 700;
+  box-shadow: 0 0 0 1px var(--c), 0 0 10px color-mix(in srgb, var(--c) 60%, transparent); }
 .bento-watermark { position: fixed; inset: -40%; z-index: 55; pointer-events: none; background-repeat: repeat;
   mix-blend-mode: difference; }
 .ed-viewergate { z-index: 2100; }

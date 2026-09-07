@@ -32,6 +32,11 @@ pre-1.0.
   `styles.css` `.bento-btnrow`; the existing `pulseAffordances` glow and
   `wireBindingReactivity` subscription work unchanged because the element is still a
   `filter`.
+- **Filmstrip legibility**: chips are laid out as an equal-width grid (was flex, where a
+  short last row stretched its few chips to full width and rows had visibly different chip
+  sizes — column count is now `ceil(n/2)` above 18 slides), and the CURRENT chip picks its
+  text colour from the chapter colour's luminance (`readableInk`, exposed as `--fg`)
+  instead of a hardcoded dark ink, which was unreadable on dark navy chapters.
 - **Open reporting** (`doc.analytics {url, id?, pages?}`): a handed-out deck posts one
   `open` event (copy id, viewer name from the watermark gate, opened via file/https/http,
   UA, timezone, screen) and, from present mode, per-page dwell seconds — as a
