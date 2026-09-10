@@ -77,6 +77,31 @@ node ../scripts/test-preview.ts     # first-page preview rig (encryption veto, o
 node ../scripts/shell-gate.mjs dist-single/Bento_Slides.bento.html   # splice conformance
 ```
 
+## 把 PPT/PDF 做成 bento 时——先跑 pptx_extract，别徒手读
+
+用户丢一个 .pptx 让你转 bento，**不要直接自己读 pptx 凭印象重做**。PowerPoint 常把
+文字塞进多层嵌套的组合形状（group shape）里，只读顶层 shape 会静默丢掉一大截
+（2026-09-10 jinna 那份实测 24 页 476 块文字、**32% 藏在组合里读不到**，导致"数据掉了"、
+读不全的页被"自由发挥"脑补，来回改了八轮）。流程固定三步：
+
+```sh
+# ① 先量会漏多少（顶层 vs 递归全部）
+python3 ../scripts/pptx_extract.py coverage workspace/inbox/xxx.pptx
+# ② 出结构化底座（每页全部文本+表格+分组归属路径），照它写 bento，不徒手读 pptx
+python3 ../scripts/pptx_extract.py extract workspace/inbox/xxx.pptx -o /tmp/src.json
+# ③ 交付前数据覆盖门禁：从成品 .bento.html 的 bento-doc JSON 抽所有字符串存 produced.txt，
+#    比对源 PPT 的数字/专有词有没有丢。数字丢=退出码1，绝不交付
+python3 ../scripts/pptx_extract.py cover-check workspace/inbox/xxx.pptx --produced /tmp/produced.txt
+```
+
+铁律：
+- **图片式页面 / OLE 对象**：`extract` 会标 `kind=image/ole`——文字提取不到，
+  必须逐页把源 PPT 渲染成图**照着原图对位**，绝不脑补（jinna 明说"发挥的成分有点多"）。
+- **忠于原稿**：分组归属、扉页总结、卡片格式照搬源结构，不自由重组；要优化排版另说。
+- cover-check 只查"数据有没有丢"（对 bento 卡片化重排免疫），措辞/顺序/视觉靠 page-verify。
+
+morning-picks / quarterly-design 等要处理 PPT 的项目同样适用，脚本无 bento 依赖可直接复用。
+
 ## Repo layout
 
 ```
